@@ -6,7 +6,6 @@ declare module "next-auth" {
     user: {
       discordId: string;
       permissionTier: PermissionTier;
-      roles: string[];
     } & DefaultSession["user"];
     /** True only when sign-in succeeded but the guild-membership/role
      * re-check has since failed (token expired, kicked from guild, etc).
@@ -19,7 +18,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     discordId?: string;
     permissionTier?: PermissionTier;
-    roles?: string[];
     accessToken?: string;
     rolesCheckedAt?: number;
     invalid?: boolean;

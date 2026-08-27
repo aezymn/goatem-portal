@@ -44,9 +44,14 @@ export function Navbar() {
                 Roster
               </Link>
               {session.user.permissionTier === "ADMIN" && (
-                <Link href="/admin/audit-log" className="hover:underline">
-                  Audit Log
-                </Link>
+                <>
+                  <Link href="/admin/permissions" className="hover:underline">
+                    Permissions
+                  </Link>
+                  <Link href="/admin/audit-log" className="hover:underline">
+                    Audit Log
+                  </Link>
+                </>
               )}
             </>
           )}

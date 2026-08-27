@@ -5,6 +5,8 @@ import { and, eq, isNull } from "drizzle-orm";
 import { requireTier } from "@/lib/requireSession";
 import { updateMemberSchema } from "@/lib/validation";
 import { getMemberByDiscordId } from "@/lib/members";
+import { getRankEligibility } from "@/lib/rankPermissions";
+import { isGrantAllowed } from "@/lib/permissions";
 import { logAudit } from "@/lib/audit";
 
 export async function PATCH(
@@ -23,6 +25,32 @@ export async function PATCH(
       { error: "Invalid input", details: parsed.error.flatten() },
       { status: 400 }
     );
+  }
+
+  const [existingForCheck] = await db
+    .select()
+    .from(members)
+    .where(and(eq(members.id, id), isNull(members.deletedAt)))
+    .limit(1);
+  if (!existingForCheck) {
+    return NextResponse.json({ error: "not found" }, { status: 404 });
+  }
+
+  // Granting access is capped server-side by the target rank's configured
+  // eligibility — never trust that the UI already enforced this. This is
+  // the actual gate that stops someone with an ungranted rank getting
+  // portal access even if a request is crafted by hand.
+  if (parsed.data.grantedTier != null) {
+    const effectiveRank = parsed.data.rank ?? existingForCheck.rank;
+    const eligibility = await getRankEligibility(effectiveRank);
+    if (!isGrantAllowed(parsed.data.grantedTier, eligibility)) {
+      return NextResponse.json(
+        {
+          error: `${effectiveRank} isn't configured as eligible for ${parsed.data.grantedTier} access. Set that rank's eligibility on the Permissions page first.`,
+        },
+        { status: 400 }
+      );
+    }
   }
 
   try {

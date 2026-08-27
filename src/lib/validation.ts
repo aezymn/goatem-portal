@@ -19,6 +19,8 @@ export const createCommentSchema = z.object({
   body: z.string().trim().min(1).max(2000),
 });
 
+export const grantableTierSchema = z.enum(["STAFF", "ADMIN"]);
+
 export const createMemberSchema = z.object({
   robloxUsername: z.string().trim().min(3).max(50),
   discordId: z
@@ -32,4 +34,15 @@ export const createMemberSchema = z.object({
   notes: z.string().trim().max(2000).nullable().optional(),
 });
 
-export const updateMemberSchema = createMemberSchema.partial();
+// grantedTier is deliberately NOT part of createMemberSchema — granting
+// access is always a separate, explicit second step (the roster toggle),
+// never something that can be slipped in on the same request that adds
+// someone to the roster.
+export const updateMemberSchema = createMemberSchema.partial().extend({
+  grantedTier: grantableTierSchema.nullable().optional(),
+});
+
+export const setRankEligibilitySchema = z.object({
+  rank: z.string().trim().min(1).max(50),
+  eligibleTier: grantableTierSchema.nullable(),
+});

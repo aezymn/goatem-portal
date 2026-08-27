@@ -2,9 +2,12 @@
 
 This is phase 1 of the custom replacement we talked through: bug/issue
 tracking (the piece neither Hyra nor FiveRoster had), plus a basic roster
-view, both gated behind Discord login tied to your actual server roles.
-Analytics, LOA, and activity-status stay on the sheet for now and migrate
-over in later phases.
+view, both gated behind Discord login (you must be a current member of the
+guild). What someone can actually *do* once logged in is decided entirely
+inside the app — rank eligibility plus an explicit per-person grant, never
+by which Discord role they happen to hold — see §5b below. Analytics, LOA,
+and activity-status stay on the sheet for now and migrate over in later
+phases.
 
 Everything below assumes zero CLI use after the very first setup — once
 it's connected to GitHub, Vercel deploys automatically every time code
@@ -73,8 +76,7 @@ up automatically within about a minute.
    - `NEXTAUTH_URL` — leave blank for now, come back to this in step 3b.
    - `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` — from step 4 below;
      you can deploy once without these and add them after, then redeploy.
-   - `DISCORD_GUILD_ID`, `DISCORD_ADMIN_ROLE_IDS`, `DISCORD_STAFF_ROLE_IDS`
-     — from step 5 below.
+   - `DISCORD_GUILD_ID` — from step 5 below.
    - `AUDIT_WEBHOOK_URL` — optional, from step 6 below.
 3. Click **Deploy**. First deploy takes a minute or two.
 4. Once it's live, Vercel shows you a URL like
@@ -104,22 +106,51 @@ no permissions to configure. Step 6 below adds a bot to this *same*
 application for avatars and role colors, which is a separate, optional
 capability layered on top.
 
-## 5. Find your guild and role IDs
+## 5. Find your guild ID
 
 You'll need Developer Mode on in Discord first: User Settings → Advanced →
 Developer Mode.
 
 - **Guild ID**: right-click your server's icon → Copy Server ID →
   `DISCORD_GUILD_ID`.
-- **Role IDs**: Server Settings → Roles, right-click each role you want
-  mapped → Copy Role ID. Put every role that should count as full admin
-  access into `DISCORD_ADMIN_ROLE_IDS` (comma-separated, no spaces), and
-  everyone who should be able to triage bug reports (but not everything
-  admins can do) into `DISCORD_STAFF_ROLE_IDS`. Anyone signed in who
-  matches neither list still gets basic access — view the roster, file
-  reports, comment — just not triage or admin actions.
 
-Redeploy after adding these (Vercel dashboard → Redeploy).
+Redeploy after adding this (Vercel dashboard → Redeploy).
+
+Note: Discord roles are used **only** for this membership check — whether
+someone is currently in the server at all. They're never used to decide
+what someone can do inside the portal. That's deliberate: whoever manages
+roles in Discord might not be a portal admin, and a role by itself should
+never quietly hand someone elevated access. See "Granting access" below.
+
+## 5b. Granting access (rank eligibility + per-person grants)
+
+This is a two-step, admin-only process inside the app itself — nothing to
+configure in Vercel or Discord for this part.
+
+1. **Set which ranks are even eligible for anything** — the **Permissions**
+   page (nav bar, admin only). For each organizational rank on your
+   roster, choose "Not eligible," "Staff," or "Admin." This is a
+   *ceiling*, not a grant — setting a rank to "Staff" doesn't give anyone
+   access yet, it just makes people with that rank *eligible* to be
+   granted it.
+2. **Actually grant it to a specific person** — the **Roster** page. Next
+   to each person whose rank has been made eligible, there's an "Grant
+   access" toggle. An admin has to deliberately switch it on for *that
+   person*. This is the step that stops someone who can hand out a
+   Discord role (or edit the roster rank field) from silently giving a
+   friend portal access — a named admin has to have actually looked at
+   that specific person and decided yes.
+
+If a rank's eligibility is later lowered or removed, everyone holding that
+rank loses the corresponding access immediately (their next request just
+resolves to the lower tier) — there's no separate cleanup step.
+
+**Staff** can triage bug reports (change status, assign). **Admin** can
+also do everything on the Roster and Permissions pages, and delete
+reports. If you want every QA staffer to have full triage access, just set
+their rank's eligibility to "Staff" (or "Admin," if you want them able to
+manage the roster too) and grant it to each of them — there's no
+requirement to split people between the two tiers if you don't want to.
 
 ## 6. Optional: real avatars and Discord role colors
 
@@ -169,24 +200,46 @@ as `AUDIT_WEBHOOK_URL` in Vercel, redeploy.
    an "access denied" style message, it means the account you used isn't
    currently a member of the guild `DISCORD_GUILD_ID` points at — the
    membership check is live against Discord, not a guess.
-4. You won't be able to file a report yet if you're not on the roster —
-   that's expected for the very first login, since nobody's been added
-   yet. Add yourself: for now this needs a direct database insert (ask me
-   and I'll either walk you through Neon/Supabase's built-in table editor,
-   which is a normal web UI, or write you a one-off script) — after that
-   first person exists, everything else can be managed from the Roster
-   page in the app itself by anyone with admin access.
+4. You won't be able to file a report, and won't see the Roster or
+   Permissions pages, until you're on the roster with access actually
+   granted — that's expected for the very first login, since nobody's
+   been added yet, and there's a genuine chicken-and-egg problem here: the
+   Permissions page is how eligibility normally gets set, but you need
+   ADMIN access to open it. Bootstrapping the very first admin needs two
+   direct database rows (ask me and I'll either walk you through
+   Neon/Supabase's built-in table editor, which is a normal web UI, or
+   write you a one-off script): a `members` row for you with `rank` set to
+   whatever you want (e.g. "Founder") and `granted_tier` set to `ADMIN`,
+   **and** a matching `rank_permissions` row for that same rank with
+   `eligible_tier` set to `ADMIN` — both have to exist, since your actual
+   access is always the lower of the two (see src/lib/permissions.ts).
+   After that first person exists, everything else (adding people, rank
+   eligibility, granting access to anyone else) can be done from inside
+   the app.
 
 ## How this is organized (for when you poke around the code)
 
-- `src/db/schema.ts` — the four tables: `members`, `bug_reports`,
-  `comments`, `audit_log`. Every deletable table has a `deletedAt` column;
-  nothing is ever hard-deleted through the app.
-- `src/lib/auth.ts` — Discord OAuth, the live guild-membership check, and
-  the permission-tier resolution. Re-checks your roles against Discord
-  every 15 minutes on an active session, not just once at login.
-- `src/lib/permissions.ts` — the three tiers (MEMBER / STAFF / ADMIN) and
-  how Discord role IDs map to them.
+- `src/db/schema.ts` — the five tables: `members`, `rank_permissions`,
+  `bug_reports`, `comments`, `audit_log`. Every deletable table has a
+  `deletedAt` column; nothing is ever hard-deleted through the app.
+- `src/lib/auth.ts` — Discord OAuth and the live guild-membership check
+  ONLY. Re-checks membership against Discord every 15 minutes on an active
+  session, not just once at login. It has no say in what someone can do —
+  it calls into `src/lib/rankPermissions.ts` for that.
+- `src/lib/permissions.ts` — the three tiers (MEMBER / STAFF / ADMIN),
+  `tierAtLeast()` for comparisons, and `resolveTier()` / `isGrantAllowed()`
+  — the capping logic that combines a rank's eligibility with a person's
+  actual grant (the lower of the two always wins).
+- `src/lib/rankPermissions.ts` — reads/lists rank eligibility
+  (`rank_permissions`) and resolves a member's effective tier from it plus
+  their `granted_tier`.
+- `src/app/admin/permissions/page.tsx` +
+  `src/app/api/admin/rank-permissions/route.ts` — the Permissions page:
+  sets each rank's eligibility ceiling. Admin-only, audit-logged.
+- The Roster page's access toggle
+  (`src/components/GrantToggle.tsx` → `PATCH /api/roster/[id]`) — the
+  actual per-person grant, capped server-side by the target's rank
+  eligibility regardless of what the request claims.
 - `src/lib/requireSession.ts` — the one function every API route calls to
   find out who's asking and whether they're allowed. This is the actual
   security boundary — page-level redirects (`src/proxy.ts`) are just a

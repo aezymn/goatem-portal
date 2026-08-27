@@ -28,6 +28,23 @@ export const reportStatusEnum = pgEnum("report_status", [
   "RESOLVED",
 ]);
 
+// A rank being "eligible" for a tier only controls what an admin is
+// ALLOWED to grant someone of that rank — it never grants access by
+// itself. See members.grantedTier below and src/lib/permissions.ts for
+// why that split matters: it's the difference between "this rank is
+// normally trusted with triage" and "this specific person has actually
+// been handed that trust" — someone getting handed a rank by whoever
+// manages Discord roles doesn't silently inherit portal access with it.
+export const tierEnum = pgEnum("tier", ["STAFF", "ADMIN"]);
+
+export const rankPermissions = pgTable("rank_permissions", {
+  rank: text("rank").primaryKey(),
+  eligibleTier: tierEnum("eligible_tier"), // null = not eligible for anything
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const members = pgTable(
   "members",
   {
@@ -37,6 +54,11 @@ export const members = pgTable(
     rank: text("rank").notNull(),
     status: text("status"),
     notes: text("notes"),
+    // The actual, explicit grant — set only by an admin, only up to what
+    // this person's current rank is eligible for (enforced in the API,
+    // not just the UI). Null means MEMBER: can view, file, and comment,
+    // nothing more, regardless of rank.
+    grantedTier: tierEnum("granted_tier"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -147,6 +169,7 @@ export const commentsRelations = relations(comments, ({ one }) => ({
 
 export type Member = typeof members.$inferSelect;
 export type NewMember = typeof members.$inferInsert;
+export type RankPermission = typeof rankPermissions.$inferSelect;
 export type BugReport = typeof bugReports.$inferSelect;
 export type NewBugReport = typeof bugReports.$inferInsert;
 export type Comment = typeof comments.$inferSelect;
