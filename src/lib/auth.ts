@@ -2,63 +2,33 @@ import type { AuthOptions } from "next-auth";
 import DiscordProvider from "next-auth/providers/discord";
 import { getMemberByDiscordId } from "@/lib/members";
 import { getRankActions } from "@/lib/ranks";
+import { isCreatorDiscordId } from "@/lib/permissions";
 import type { RankAction } from "@/lib/permissions";
 
 // How often (ms) a live session re-verifies guild membership and
-// recomputes access (CREATOR status, portal-admin flag, rank actions).
-// Bounds how stale someone's access can get after they're kicked from
-// the guild, or after an admin changes a grant or a rank's actions —
-// worst case is this window, not "until they happen to log out."
+// recomputes access (portal-admin flag, rank actions). Bounds how stale
+// someone's access can get after they're kicked from the guild, or after
+// an admin changes a grant or a rank's actions — worst case is this
+// window, not "until they happen to log out."
 const RECHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
-interface DiscordGuildMembership {
-  id: string;
-  owner: boolean;
-}
-
 /**
- * Confirms guild membership AND, in the same call, whether this person
- * owns the guild — using their own OAuth access token (scopes: identify,
- * guilds.members.read, guilds). No bot token or special intents required
- * for either check, which matters: CREATOR status (see
- * src/lib/permissions.ts) has to work even if the optional bot is never
- * set up, since it's the one identity the whole admin-designation system
- * bootstraps from.
- *
- * Returns null if they're not currently a member of the guild at all.
+ * Confirms the caller is currently a member of the studio's Discord
+ * guild, using their own OAuth access token (scope: guilds.members.read)
+ * — no bot token or special intents required. This is ONLY a login gate;
+ * it says nothing about what they can do once they're in. CREATOR status,
+ * portal-admin, and rank actions are all resolved separately — see
+ * src/lib/permissions.ts.
  */
-async function getGuildMembership(
-  accessToken: string
-): Promise<{ isMember: boolean; isOwner: boolean }> {
+async function isGuildMember(accessToken: string): Promise<boolean> {
   const guildId = process.env.DISCORD_GUILD_ID;
   if (!guildId) throw new Error("DISCORD_GUILD_ID is not configured");
 
-  const memberRes = await fetch(
+  const res = await fetch(
     `https://discord.com/api/v10/users/@me/guilds/${guildId}/member`,
     { headers: { Authorization: `Bearer ${accessToken}` } }
   );
-  if (!memberRes.ok) {
-    return { isMember: false, isOwner: false }; // not a member, expired token, rate limited, etc.
-  }
-
-  // A second call, using the `guilds` scope, to ask Discord which of the
-  // user's guilds they own. Fails soft to "not owner" — losing the
-  // CREATOR badge/capability on a transient Discord hiccup is much safer
-  // than the alternative.
-  let isOwner = false;
-  try {
-    const guildsRes = await fetch("https://discord.com/api/v10/users/@me/guilds", {
-      headers: { Authorization: `Bearer ${accessToken}` },
-    });
-    if (guildsRes.ok) {
-      const guilds = (await guildsRes.json()) as DiscordGuildMembership[];
-      isOwner = guilds.some((g) => g.id === guildId && g.owner === true);
-    }
-  } catch {
-    isOwner = false;
-  }
-
-  return { isMember: true, isOwner };
+  return res.ok; // false = not a member, revoked token, rate limited, etc.
 }
 
 /** Looks up this person's roster row and resolves the actions their
@@ -81,10 +51,7 @@ export const authOptions: AuthOptions = {
     DiscordProvider({
       clientId: process.env.DISCORD_CLIENT_ID!,
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
-      // `guilds` (on top of the identify/membership scopes already in use)
-      // lets us ask Discord which guilds this person OWNS, without a bot
-      // — see getGuildMembership above.
-      authorization: { params: { scope: "identify guilds.members.read guilds" } },
+      authorization: { params: { scope: "identify guilds.members.read" } },
     }),
   ],
   session: {
@@ -103,8 +70,7 @@ export const authOptions: AuthOptions = {
       // Reject sign-in outright for anyone who isn't currently in the
       // studio's Discord guild — this is the front door, not just a
       // display filter.
-      const { isMember } = await getGuildMembership(account.access_token);
-      return isMember;
+      return isGuildMember(account.access_token);
     },
     async jwt({ token, account, profile }) {
       const isInitialSignIn = Boolean(account && profile);
@@ -113,16 +79,13 @@ export const authOptions: AuthOptions = {
         // We already know `signIn` succeeded, so this should too. If it
         // somehow doesn't (race, Discord hiccup), fail closed rather than
         // issue a token that looks valid but isn't.
-        const { isMember, isOwner } = await getGuildMembership(
-          account.access_token
-        );
-        if (!isMember) {
+        if (!(await isGuildMember(account.access_token))) {
           token.invalid = true;
           return token;
         }
         const discordId = (profile as { id: string }).id;
         token.discordId = discordId;
-        token.isCreator = isOwner;
+        token.isCreator = isCreatorDiscordId(discordId);
         token.isPortalAdmin = await computeIsPortalAdmin(discordId);
         token.actions = await computeRankActions(discordId);
         token.accessToken = account.access_token;
@@ -137,10 +100,7 @@ export const authOptions: AuthOptions = {
         Date.now() - token.rolesCheckedAt > RECHECK_INTERVAL_MS;
 
       if (dueForRecheck && token.accessToken && token.discordId) {
-        const { isMember, isOwner } = await getGuildMembership(
-          token.accessToken
-        );
-        if (!isMember) {
+        if (!(await isGuildMember(token.accessToken))) {
           // No longer a guild member, or the access token has
           // expired/been revoked. Either way: stop trusting this session.
           token.invalid = true;
@@ -149,7 +109,10 @@ export const authOptions: AuthOptions = {
           token.actions = [];
           return token;
         }
-        token.isCreator = isOwner;
+        // Recomputed every time rather than trusted from the existing
+        // token, so changing PORTAL_CREATOR_DISCORD_ID takes effect
+        // within one recheck window instead of requiring a re-login.
+        token.isCreator = isCreatorDiscordId(token.discordId);
         token.isPortalAdmin = await computeIsPortalAdmin(token.discordId);
         token.actions = await computeRankActions(token.discordId);
         token.rolesCheckedAt = Date.now();

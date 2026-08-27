@@ -1,10 +1,14 @@
 // The access model, top to bottom:
 //
-//   1. CREATOR — the Discord server's actual owner. Computed live from
-//      their own OAuth token at login/recheck (src/lib/auth.ts), never
-//      stored, never grantable or revocable through the app. Always has
-//      full access to everything, and is the ONLY one who can promote or
-//      demote a portal ADMIN (below).
+//   1. CREATOR — one specific Discord account, named by the
+//      PORTAL_CREATOR_DISCORD_ID environment variable. Deliberately NOT
+//      stored in the database and NOT derived from Discord server
+//      ownership: it lives outside the app entirely, so no amount of
+//      access inside the portal — or inside Discord — can grant, revoke,
+//      or transfer it. Changing it means changing an environment
+//      variable in the hosting dashboard. Always has full access to
+//      everything, and is the ONLY one who can promote or demote a
+//      portal ADMIN (below).
 //   2. Portal ADMIN — members.isPortalAdmin. A specific, named person the
 //      CREATOR has explicitly designated on the Admin Access panel. Full
 //      access to everything except designating other admins.
@@ -20,9 +24,21 @@
 // The deliberate split between #2 and #3 is the whole point: whoever
 // manages ranks or Discord roles might not be trusted with full access,
 // so a rank — however it's configured — can never reach portal-admin.
-// Only the CREATOR, a single fixed identity Discord itself defines, can
+// Only the CREATOR, a single fixed identity defined outside the app, can
 // hand that out. See src/lib/auth.ts and src/lib/ranks.ts for how each
 // piece gets resolved.
+
+/**
+ * True only for the one Discord account named by
+ * PORTAL_CREATOR_DISCORD_ID. Returns false when that variable is unset
+ * or blank — failing closed, so a misconfigured deploy grants nobody
+ * CREATOR rather than everybody.
+ */
+export function isCreatorDiscordId(discordId: string | undefined): boolean {
+  const configured = process.env.PORTAL_CREATOR_DISCORD_ID?.trim();
+  if (!configured || !discordId) return false;
+  return discordId === configured;
+}
 
 export const RANK_ACTIONS = [
   "reports.triage",

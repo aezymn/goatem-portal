@@ -76,7 +76,9 @@ up automatically within about a minute.
    - `NEXTAUTH_URL` — leave blank for now, come back to this in step 3b.
    - `DISCORD_CLIENT_ID` / `DISCORD_CLIENT_SECRET` — from step 4 below;
      you can deploy once without these and add them after, then redeploy.
-   - `DISCORD_GUILD_ID` — from step 5 below.
+   - `DISCORD_GUILD_ID` and `PORTAL_CREATOR_DISCORD_ID` — from step 5
+     below. The second one is what gives you full access; without it
+     nobody is CREATOR and nobody can appoint admins.
    - `AUDIT_WEBHOOK_URL` — optional, from step 6 below.
 3. Click **Deploy**. First deploy takes a minute or two.
 4. Once it's live, Vercel shows you a URL like
@@ -106,40 +108,40 @@ no permissions to configure. Step 6 below adds a bot to this *same*
 application for avatars and role colors, which is a separate, optional
 capability layered on top.
 
-(One small heads-up: the Discord consent screen now also asks to see
-which servers you're in — that's the `guilds` OAuth scope, added so the
-app can tell CREATOR status apart from everyone else without needing a
-bot at all. Nothing to configure for it; it's requested automatically.)
-
-## 5. Find your guild ID
+## 5. Find your guild ID and your own user ID
 
 You'll need Developer Mode on in Discord first: User Settings → Advanced →
 Developer Mode.
 
 - **Guild ID**: right-click your server's icon → Copy Server ID →
   `DISCORD_GUILD_ID`.
+- **Your user ID**: right-click your own name anywhere in Discord → Copy
+  User ID → `PORTAL_CREATOR_DISCORD_ID`. This is what makes you the
+  CREATOR (§5b) — get it right, because it's the account that will hold
+  full access.
 
-Redeploy after adding this (Vercel dashboard → Redeploy).
+Redeploy after adding these (Vercel dashboard → Redeploy).
 
-Note: Discord roles/membership are used **only** to confirm someone is
-currently in the server at all (the login gate) — and, separately, to
-recognize whoever Discord itself says *owns* the server (the CREATOR —
-see below). Neither one decides what a signed-in person can actually DO
-inside the portal. That's deliberate: whoever manages roles in Discord
-might not be someone you'd trust with full access, and a role by itself
-should never quietly hand someone elevated access. See §5b.
+Note: Discord roles and server ownership decide **nothing** about what
+someone can do in the portal. Discord membership is only the login gate —
+"are you currently in the server at all." That's deliberate: whoever
+manages roles in Discord might not be someone you'd trust with full
+access, and a role by itself should never quietly hand someone elevated
+access. See §5b.
 
 ## 5b. How access actually works
 
 Three layers, entirely inside the app — nothing further to configure in
 Vercel or Discord beyond what's already above:
 
-1. **CREATOR** — you, specifically, meaning whichever Discord account
-   currently owns this server. The app checks this live against Discord
-   every time it matters; it's never stored anywhere and nobody can grant
-   or take it away, including you (short of transferring server
-   ownership in Discord itself). The CREATOR can do everything, and is
-   the *only* one who can hand out the next layer:
+1. **CREATOR** — you, specifically: the one Discord account whose user ID
+   is set as `PORTAL_CREATOR_DISCORD_ID`. Not a role, not a database row,
+   not server ownership — it lives in the hosting environment, outside
+   the app entirely, so nothing anyone does inside the portal or inside
+   Discord can grant it, revoke it, or hand it to someone else. Changing
+   who the CREATOR is means editing that one variable in Vercel and
+   redeploying. The CREATOR can do everything, and is the *only* one who
+   can hand out the next layer:
 2. **Admin** — full access, given to a specific named person on the
    **Admin Access** page (only visible to you, the CREATOR). A simple
    list with a search-to-add box and a remove button, with a confirmation
@@ -209,19 +211,25 @@ as `AUDIT_WEBHOOK_URL` in Vercel, redeploy.
    an "access denied" style message, it means the account you used isn't
    currently a member of the guild `DISCORD_GUILD_ID` points at — the
    membership check is live against Discord, not a guess.
-4. Because you're the Discord account that owns this server, you're
-   automatically CREATOR the moment you sign in — no database edit, no
-   bootstrap step, nothing else to configure. You'll see Ranks, Admin
-   Access, and Audit Log in the nav bar immediately, even before you're
-   on the roster at all. (This was a genuine chicken-and-egg problem in
-   an earlier version of this model — CREATOR being computed live from
-   Discord ownership, rather than stored anywhere, is specifically what
-   removes it.)
+4. Because your Discord user ID is set as `PORTAL_CREATOR_DISCORD_ID`,
+   you're CREATOR the moment you sign in — no database edit, no bootstrap
+   step, nothing else to configure. You'll see Ranks, Admin Access, and
+   Audit Log in the nav bar immediately, even before you're on the roster
+   at all. (This is what makes it impossible to lock yourself out: your
+   access doesn't depend on any row in the database, so nothing you do —
+   including removing yourself from the roster — can take it away.)
 5. Add yourself to the roster from the Roster page (you have access
    as CREATOR even with nothing configured yet), then use the Ranks page
    to tick whatever your rank should be able to do. Everyone else — other
    admins, everyone's rank permissions — is managed from inside the app
    from here on.
+
+   If you were on the roster before and removed yourself, re-adding you
+   with the same Roblox username brings your original row back rather
+   than creating a duplicate — soft-deleted people still hold their
+   username and Discord ID, so the app restores instead of erroring.
+   (Admin status is deliberately *not* restored along with it; that has
+   to be re-granted on the Admin Access page.)
 
 ## How this is organized (for when you poke around the code)
 
@@ -230,9 +238,10 @@ as `AUDIT_WEBHOOK_URL` in Vercel, redeploy.
   deletable table has a `deletedAt` column; nothing is ever hard-deleted
   through the app.
 - `src/lib/auth.ts` — Discord OAuth, the live guild-membership check, and
-  the live CREATOR check (whether the signed-in person currently owns the
-  guild, via their own OAuth token — no bot required). Re-checks all of
-  this against Discord every 15 minutes on an active session, not just
+  the CREATOR check (a straight comparison against
+  `PORTAL_CREATOR_DISCORD_ID`, re-evaluated on every recheck so changing
+  that variable takes effect without anyone re-logging-in). Re-checks all
+  of this against Discord every 15 minutes on an active session, not just
   once at login. It has no say in rank-based access — it calls into
   `src/lib/ranks.ts` for that.
 - `src/lib/permissions.ts` — `RANK_ACTIONS` (the fixed catalog: today
