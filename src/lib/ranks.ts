@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { members, ranks, rankActionPermissions } from "@/db/schema";
-import { and, asc, eq, isNull, max } from "drizzle-orm";
+import { and, asc, count, eq, isNull, max } from "drizzle-orm";
 import type { RankAction } from "@/lib/permissions";
 import { isRankAction } from "@/lib/permissions";
 
@@ -11,6 +11,9 @@ export interface RankWithActions {
   position: number;
   discordRoleId: string | null;
   actions: RankAction[];
+  /** How many people currently hold this rank. Shown on the Ranks page,
+   * and what makes a rank undeletable while it's still in use. */
+  memberCount: number;
 }
 
 /** The actions a specific rank currently grants. Empty array (never null)
@@ -29,14 +32,17 @@ export async function getRankActions(rank: string): Promise<RankAction[]> {
  * (see ensureRank) — defensive merge so a straggler never just vanishes
  * from the list. */
 export async function listRanksWithActions(): Promise<RankWithActions[]> {
-  const [rankRows, actionRows, rosterRanks] = await Promise.all([
+  const [rankRows, actionRows, rosterCounts] = await Promise.all([
     db.select().from(ranks).orderBy(asc(ranks.position)),
     db.select().from(rankActionPermissions),
     db
-      .selectDistinct({ rank: members.rank })
+      .select({ rank: members.rank, n: count() })
       .from(members)
-      .where(isNull(members.deletedAt)),
+      .where(isNull(members.deletedAt))
+      .groupBy(members.rank),
   ]);
+
+  const countByRank = new Map(rosterCounts.map((r) => [r.rank, Number(r.n)]));
 
   const actionsByRank = new Map<string, RankAction[]>();
   for (const row of actionRows) {
@@ -53,6 +59,7 @@ export async function listRanksWithActions(): Promise<RankWithActions[]> {
       position: r.position,
       discordRoleId: r.discordRoleId,
       actions: actionsByRank.get(r.name) ?? [],
+      memberCount: countByRank.get(r.name) ?? 0,
     });
   }
 
@@ -61,13 +68,14 @@ export async function listRanksWithActions(): Promise<RankWithActions[]> {
   // with no actions and no binding — same fallback the old model used.
   let nextPosition =
     rankRows.length > 0 ? Math.max(...rankRows.map((r) => r.position)) + 1 : 0;
-  for (const { rank } of rosterRanks) {
+  for (const rank of countByRank.keys()) {
     if (known.has(rank)) continue;
     known.set(rank, {
       name: rank,
       position: nextPosition++,
       discordRoleId: null,
       actions: [],
+      memberCount: countByRank.get(rank) ?? 0,
     });
   }
 
@@ -140,4 +148,51 @@ export async function setRankAction(
         )
       );
   }
+}
+
+/** Creates a new, empty rank at the bottom of the ladder. Returns false
+ * if that name already exists — rank names are the identity members
+ * reference, so duplicates aren't possible. */
+export async function createRank(name: string): Promise<boolean> {
+  const [{ value } = { value: null }] = await db
+    .select({ value: max(ranks.position) })
+    .from(ranks);
+  const inserted = await db
+    .insert(ranks)
+    .values({ name, position: (value ?? -1) + 1 })
+    .onConflictDoNothing({ target: ranks.name })
+    .returning();
+  return inserted.length > 0;
+}
+
+export type DeleteRankResult =
+  | { ok: true }
+  | { ok: false; reason: "in-use"; memberCount: number }
+  | { ok: false; reason: "not-found" };
+
+/**
+ * Removes a rank outright.
+ *
+ * Refused while anyone still holds it: members.rank is a plain text
+ * column, so deleting a rank in use would leave those people pointing at
+ * something that no longer exists — invisible on this page, and silently
+ * granting nothing. Move them first, and the deletion becomes safe.
+ *
+ * This is a genuine delete rather than the soft-delete used for people
+ * and reports, because a rank nobody holds is configuration, not history
+ * — and the audit log still records that it happened. Its action rows go
+ * with it via ON DELETE CASCADE.
+ */
+export async function deleteRank(name: string): Promise<DeleteRankResult> {
+  const [{ n } = { n: 0 }] = await db
+    .select({ n: count() })
+    .from(members)
+    .where(and(eq(members.rank, name), isNull(members.deletedAt)));
+
+  const memberCount = Number(n);
+  if (memberCount > 0) return { ok: false, reason: "in-use", memberCount };
+
+  const deleted = await db.delete(ranks).where(eq(ranks.name, name)).returning();
+  if (deleted.length === 0) return { ok: false, reason: "not-found" };
+  return { ok: true };
 }

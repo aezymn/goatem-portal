@@ -38,6 +38,10 @@ export const createMemberSchema = z.object({
 // (src/app/api/admin/admins), never the regular roster edit form.
 export const updateMemberSchema = createMemberSchema.partial();
 
+export const createRankSchema = z.object({
+  name: z.string().trim().min(1, "Give the rank a name").max(50),
+});
+
 export const reorderRanksSchema = z.object({
   // The full rank ladder, top (highest authority) to bottom, as an
   // ordered list of names. The API ignores any name that isn't already a
