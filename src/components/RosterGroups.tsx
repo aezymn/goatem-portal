@@ -88,7 +88,7 @@ export function RosterGroups({
                 <path d="M9 6l6 6-6 6" />
               </svg>
 
-              <span className="font-coda text-sm uppercase tracking-wider">
+              <span className="text-sm uppercase tracking-wider">
                 {group.rank}
               </span>
 
@@ -234,7 +234,7 @@ function Badge({
   };
   return (
     <span
-      className={`font-poppins shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${tones[tone]}`}
+      className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${tones[tone]}`}
     >
       {children}
     </span>

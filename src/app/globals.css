@@ -1,14 +1,15 @@
 @import "tailwindcss";
 
-/* Coda, self-hosted via the Fontsource npm package rather than fetched
-   from fonts.googleapis.com at runtime. Two reasons: the font is served
-   from our own origin, so the Content-Security-Policy in next.config.ts
-   needs no extra style-src/font-src exceptions; and there's no
-   render-blocking request to a third party on every page load. */
-@import "@fontsource/coda/latin-400.css";
-@import "@fontsource/coda/latin-800.css";
-/* Poppins, for the small uppercase status badges only — hence just the
-   one weight they actually use. */
+/* Poppins, self-hosted via the Fontsource npm package rather than fetched
+   from fonts.googleapis.com at runtime. Two reasons: it's served from our
+   own origin, so the Content-Security-Policy in next.config.ts needs no
+   extra style-src/font-src exceptions; and there's no render-blocking
+   request to a third party on every page load.
+
+   Only the three weights the app actually uses — shipping faces nothing
+   renders just costs everyone bandwidth. */
+@import "@fontsource/poppins/latin-400.css";
+@import "@fontsource/poppins/latin-500.css";
 @import "@fontsource/poppins/latin-600.css";
 
 :root {
@@ -19,11 +20,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* Coda ships only 400 and 800 — stick to those two weights so the
-     browser never has to synthesise one. The navbar uses 400. */
-  --font-coda: "Coda", system-ui, sans-serif;
-  --font-poppins: "Poppins", system-ui, sans-serif;
+  --font-sans: "Poppins", system-ui, -apple-system, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 
@@ -37,5 +34,5 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans);
 }
