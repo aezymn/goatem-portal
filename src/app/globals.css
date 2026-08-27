@@ -1,5 +1,13 @@
 @import "tailwindcss";
 
+/* Coda, self-hosted via the Fontsource npm package rather than fetched
+   from fonts.googleapis.com at runtime. Two reasons: the font is served
+   from our own origin, so the Content-Security-Policy in next.config.ts
+   needs no extra style-src/font-src exceptions; and there's no
+   render-blocking request to a third party on every page load. */
+@import "@fontsource/coda/latin-400.css";
+@import "@fontsource/coda/latin-800.css";
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -9,6 +17,9 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  /* Coda only ships 400 and 800 — use font-extrabold, not font-bold, so
+     the browser picks a real weight instead of synthesising one. */
+  --font-coda: "Coda", system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 

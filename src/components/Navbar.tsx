@@ -31,7 +31,7 @@ export function Navbar() {
   return (
     <header className="border-b border-zinc-200 dark:border-zinc-800">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
+        <Link href="/" className="flex items-center gap-4">
           {/* The artwork is white, which is right on the dark navbar but
               would vanish against the light one. Inverting a white
               transparent PNG yields black and preserves transparency, so
@@ -42,7 +42,9 @@ export function Navbar() {
             alt=""
             className="h-14 w-auto invert dark:invert-0"
           />
-          Quality Assurance
+          <span className="font-coda text-2xl font-extrabold tracking-tight">
+            Quality Assurance
+          </span>
         </Link>
 
         <div className="flex items-center gap-6 text-sm">
