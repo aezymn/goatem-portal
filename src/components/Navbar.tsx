@@ -2,10 +2,30 @@
 
 import { signIn, signOut, useSession } from "next-auth/react";
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
+
+interface Me {
+  robloxUsername: string | null;
+  rank: string | null;
+  avatarUrl: string | null;
+  roleColorHex: string | null;
+}
 
 export function Navbar() {
   const { data: session, status } = useSession();
   const authed = status === "authenticated" && !session?.stale;
+
+  const [me, setMe] = useState<Me | null>(null);
+  useEffect(() => {
+    // UserChip only ever renders while authed, so there's nothing to reset
+    // here when signed out — just skip fetching. Next sign-in re-runs this
+    // and overwrites `me` with fresh data before it's rendered again.
+    if (!authed) return;
+    fetch("/api/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then(setMe)
+      .catch(() => setMe(null));
+  }, [authed]);
 
   return (
     <header className="border-b border-zinc-200 dark:border-zinc-800">
@@ -32,17 +52,7 @@ export function Navbar() {
           )}
 
           {status === "loading" ? null : authed ? (
-            <div className="flex items-center gap-3">
-              <span className="rounded-full bg-zinc-100 px-2.5 py-1 text-xs font-medium text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300">
-                {session.user.permissionTier}
-              </span>
-              <button
-                onClick={() => signOut()}
-                className="rounded-md border border-zinc-300 px-3 py-1.5 hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
-              >
-                Sign out
-              </button>
-            </div>
+            <UserChip session={session} me={me} />
           ) : (
             <button
               onClick={() => signIn("discord")}
@@ -54,5 +64,94 @@ export function Navbar() {
         </div>
       </nav>
     </header>
+  );
+}
+
+function UserChip({
+  session,
+  me,
+}: {
+  session: NonNullable<ReturnType<typeof useSession>["data"]>;
+  me: Me | null;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
+        setMenuOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  const displayName = me?.robloxUsername ?? session.user.name ?? "Signed in";
+  // Deliberately the roster's organization rank, not the MEMBER/STAFF/ADMIN
+  // permission tier — that tier controls access, but it's not what anyone
+  // here would call their "rank."
+  const rankLabel = me?.rank ?? "Not on roster yet";
+
+  return (
+    <div className="flex items-center gap-2">
+      {/* The pill: avatar, name, and rank in one horizontal group */}
+      <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-100 py-1 pl-1 pr-4 dark:border-zinc-800 dark:bg-zinc-900">
+        {me?.avatarUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element -- external, bot-sourced Discord CDN avatar
+          <img
+            src={me.avatarUrl}
+            alt=""
+            className="h-8 w-8 rounded-full object-cover"
+          />
+        ) : (
+          <div className="h-8 w-8 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+        )}
+        <div className="flex flex-col leading-tight">
+          <span className="font-medium">{displayName}</span>
+          <span
+            className="text-xs"
+            style={{ color: me?.roleColorHex ?? undefined }}
+          >
+            {rankLabel}
+          </span>
+        </div>
+      </div>
+
+      {/* Settings button: separate from the pill, opens sign-out (and
+          whatever else lands here later) in a small dropdown. */}
+      <div className="relative" ref={menuRef}>
+        <button
+          onClick={() => setMenuOpen((v) => !v)}
+          aria-label="Settings"
+          className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
+        >
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            strokeLinecap="round"
+            className="h-4 w-4"
+          >
+            <line x1="4" y1="7" x2="20" y2="7" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="17" x2="20" y2="17" />
+          </svg>
+        </button>
+
+        {menuOpen && (
+          <div className="absolute right-0 top-11 z-10 w-40 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+            <button
+              onClick={() => signOut()}
+              className="block w-full px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800"
+            >
+              Sign out
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

@@ -83,19 +83,26 @@ up automatically within about a minute.
    trailing slash), and redeploy (Vercel's dashboard has a "Redeploy"
    button — still no CLI).
 
-## 4. Add Discord login to your existing bot's application
+## 4. Discord application for login
 
-1. Go to the [Discord Developer Portal](https://discord.com/developers/applications)
-   and open your existing bot's application.
-2. **OAuth2 → General**: copy the **Client ID** and (reveal + copy) the
-   **Client Secret**. These go into Vercel as `DISCORD_CLIENT_ID` /
+Use a dedicated Discord Application for the portal rather than your
+original bot's — cleaner separation, and this app doesn't need to touch
+your existing bot's token or behavior at all.
+
+1. On the [Discord Developer Portal](https://discord.com/developers/applications),
+   click **New Application**, name it something recognizable (e.g. "Goatem
+   Studios Portal"), create it.
+2. **OAuth2 → General**: copy the **Client ID** and (Reset/reveal + copy)
+   the **Client Secret**. These go into Vercel as `DISCORD_CLIENT_ID` /
    `DISCORD_CLIENT_SECRET`.
-3. Still on **OAuth2 → General**, under **Redirects**, add:
-   `https://<your-vercel-url>/api/auth/callback/discord` — using the real
-   URL from step 3.4 above. Save.
+3. Still on **OAuth2 → General**, under **Redirects**, click **Add
+   Redirect** and enter: `https://<your-vercel-url>/api/auth/callback/discord`
+   — using the real URL from step 3.4 above. Save.
 
-This doesn't touch your bot's existing token or behavior at all — it's a
-separate, additive capability on the same application.
+That's everything needed for login itself — no Bot tab, no server invite,
+no permissions to configure. Step 6 below adds a bot to this *same*
+application for avatars and role colors, which is a separate, optional
+capability layered on top.
 
 ## 5. Find your guild and role IDs
 
@@ -114,7 +121,38 @@ Developer Mode.
 
 Redeploy after adding these (Vercel dashboard → Redeploy).
 
-## 6. Optional: the audit trail mirror
+## 6. Optional: real avatars and Discord role colors
+
+Login works fine without this — it's purely for showing people's actual
+Discord pictures and their Discord role color (e.g. the navbar identity
+chip) instead of placeholders. Uses the same dedicated application from
+step 4, not your original bot.
+
+This is meaningfully easier than the Apps-Script-era attempts at this
+(the abandoned Vercel relay project) for a specific reason: Discord blocks
+API requests from Apps Script's shared, flagged IP pool, not from Vercel's
+— so this app can just call Discord's API directly, no relay needed.
+
+1. On that same application in the Discord Developer Portal, click **Bot**
+   in the left sidebar → **Add Bot** (or **Reset Token** if a bot already
+   exists there) → copy the token. This is `DISCORD_BOT_TOKEN` in Vercel.
+   You do **not** need to enable any "Privileged Gateway Intents" toggles
+   on this page — the lookups this uses don't need them.
+2. Invite the bot to your server: **OAuth2 → URL Generator**, check the
+   **bot** scope, pick a minimal permission like "View Channels" (the
+   lookups this app does don't actually need any permission bits, Discord
+   just wants something checked), copy the generated URL at the bottom,
+   open it in a browser, and authorize it into the Goatem Studios server.
+3. Add `DISCORD_BOT_TOKEN` to Vercel's Environments, redeploy.
+
+The bot never needs to be "online" or connected anywhere — this app only
+ever makes plain REST calls with the token, on demand, cached briefly
+(`src/lib/discordBot.ts`) to avoid hammering Discord's API. Everything
+that uses this degrades gracefully to placeholders if the token's missing
+or the bot's ever removed from the server — nothing breaks, it just goes
+back to showing generic avatars and default text color.
+
+## 7. Optional: the audit trail mirror
 
 Every sensitive action (status changes, roster edits, deletions) gets
 logged in the database — that part works with no setup. If you also want
@@ -123,7 +161,7 @@ copy nobody inside the app can edit or clear), create a webhook: channel
 Settings → Integrations → Webhooks → New Webhook → Copy Webhook URL → set
 as `AUDIT_WEBHOOK_URL` in Vercel, redeploy.
 
-## 7. First login
+## 8. First login
 
 1. Visit your Vercel URL, click **Sign in with Discord**.
 2. Approve the Discord authorization prompt.
@@ -155,6 +193,12 @@ as `AUDIT_WEBHOOK_URL` in Vercel, redeploy.
   nicety on top.
 - `src/lib/audit.ts` — the append-only audit logger, with the optional
   Discord webhook mirror.
+- `src/lib/discordBot.ts` — bot-token-backed avatar and role-color lookups
+  for any guild member (not just whoever's logged in). Fails soft to
+  placeholders if the bot isn't configured. `src/app/api/me/route.ts` is
+  the one route that currently uses it, backing the navbar's identity
+  chip — reusable anywhere else a picture would help (e.g. the roster
+  page) whenever that's wanted.
 - `src/app/api/**` — every backend endpoint. Reports, comments, roster,
   and the read-only audit log viewer.
 - `src/app/**` (outside `api/`) — the actual pages.
