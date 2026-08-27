@@ -50,13 +50,22 @@ export const reorderRanksSchema = z.object({
   order: z.array(z.string().trim().min(1).max(50)).min(1).max(200),
 });
 
-export const bindRankDiscordRoleSchema = z.object({
-  discordRoleId: z
-    .string()
-    .trim()
-    .regex(/^\d{15,25}$/, "must be a numeric Discord role ID")
-    .nullable(),
-});
+// One PATCH endpoint covers both edits a rank supports. Each field is
+// optional, but sending neither is a mistake worth reporting rather than
+// silently succeeding.
+export const updateRankSchema = z
+  .object({
+    discordRoleId: z
+      .string()
+      .trim()
+      .regex(/^\d{15,25}$/, "must be a numeric Discord role ID")
+      .nullable()
+      .optional(),
+    name: z.string().trim().min(1, "Give the rank a name").max(50).optional(),
+  })
+  .refine((d) => d.discordRoleId !== undefined || d.name !== undefined, {
+    message: "Nothing to update",
+  });
 
 export const setRankActionSchema = z.object({
   action: z.enum([...RANK_ACTIONS] as [string, ...string[]]),

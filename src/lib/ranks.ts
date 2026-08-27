@@ -196,3 +196,62 @@ export async function deleteRank(name: string): Promise<DeleteRankResult> {
   if (deleted.length === 0) return { ok: false, reason: "not-found" };
   return { ok: true };
 }
+
+export type RenameRankResult =
+  | { ok: true; movedMembers: number }
+  | { ok: false; reason: "not-found" }
+  | { ok: false; reason: "name-taken" };
+
+/**
+ * Renames a rank, taking everything that points at it along.
+ *
+ * Two separate things reference a rank by name, and they must not be
+ * allowed to disagree even for an instant:
+ *   - rank_action_permissions, via a real foreign key — carried
+ *     automatically by ON UPDATE CASCADE (migration 0004).
+ *   - members.rank, plain text with no key, so it's updated here by hand.
+ *
+ * Both happen in one transaction: either the rank, its permissions and
+ * everyone holding it all move together, or nothing does. A half-applied
+ * rename would silently strip people of whatever their rank granted,
+ * which is exactly the failure this guards against.
+ */
+export async function renameRank(
+  from: string,
+  to: string
+): Promise<RenameRankResult> {
+  if (from === to) return { ok: true, movedMembers: 0 };
+
+  return db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select()
+      .from(ranks)
+      .where(eq(ranks.name, from))
+      .limit(1);
+    if (!existing) return { ok: false, reason: "not-found" as const };
+
+    const [clash] = await tx
+      .select({ name: ranks.name })
+      .from(ranks)
+      .where(eq(ranks.name, to))
+      .limit(1);
+    if (clash) return { ok: false, reason: "name-taken" as const };
+
+    // Permission rows follow via ON UPDATE CASCADE.
+    await tx
+      .update(ranks)
+      .set({ name: to, updatedAt: new Date() })
+      .where(eq(ranks.name, from));
+
+    // Members don't — no foreign key — so move them explicitly. Includes
+    // soft-deleted rows on purpose: if someone is restored later, their
+    // rank should still mean something.
+    const moved = await tx
+      .update(members)
+      .set({ rank: to, updatedAt: new Date() })
+      .where(eq(members.rank, from))
+      .returning({ id: members.id });
+
+    return { ok: true as const, movedMembers: moved.length };
+  });
+}

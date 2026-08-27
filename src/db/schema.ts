@@ -65,9 +65,17 @@ export const ranks = pgTable("ranks", {
 export const rankActionPermissions = pgTable(
   "rank_action_permissions",
   {
+    // ON UPDATE CASCADE so renaming a rank carries its permissions with
+    // it automatically. members.rank has no foreign key (it's plain
+    // text), so a rename has to update that side explicitly — see
+    // renameRank in src/lib/ranks.ts, which does both in one transaction
+    // precisely so the two can never disagree.
     rank: text("rank")
       .notNull()
-      .references(() => ranks.name, { onDelete: "cascade" }),
+      .references(() => ranks.name, {
+        onDelete: "cascade",
+        onUpdate: "cascade",
+      }),
     action: text("action").notNull(),
   },
   (table) => [

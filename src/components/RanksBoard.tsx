@@ -49,6 +49,10 @@ export function RanksBoard({
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
+  // Which rank is being renamed, and the in-progress text. Null means
+  // nobody is editing.
+  const [editing, setEditing] = useState<string | null>(null);
+  const [draftName, setDraftName] = useState("");
 
   // Adjusts local state when the server hands us fresh props, during
   // render rather than in an effect.
@@ -137,6 +141,37 @@ export function RanksBoard({
       setError(data.error ?? "Couldn't bind that role — refreshing.");
       router.refresh();
     }
+  }
+
+  async function commitRename(original: string) {
+    const next = draftName.trim();
+    setEditing(null);
+    if (!next || next === original) return;
+
+    setBusyRank(original);
+    setError(null);
+    setRanks((prev) =>
+      prev.map((r) => (r.name === original ? { ...r, name: next } : r))
+    );
+
+    const res = await fetch(
+      `/api/admin/ranks/${encodeURIComponent(original)}`,
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: next }),
+      }
+    );
+    setBusyRank(null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Couldn't rename that rank.");
+      router.refresh();
+      return;
+    }
+    // Everyone holding the rank moved with it server-side; refresh so the
+    // member counts and any other derived text catch up.
+    router.refresh();
   }
 
   async function createRank(e: React.FormEvent) {
@@ -234,7 +269,38 @@ export function RanksBoard({
                   {index + 1}
                 </span>
 
-                <span className="font-medium">{rank.name}</span>
+                {editing === rank.name ? (
+                  <input
+                    autoFocus
+                    value={draftName}
+                    maxLength={50}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    onBlur={() => commitRename(rank.name)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        commitRename(rank.name);
+                      } else if (e.key === "Escape") {
+                        e.preventDefault();
+                        setEditing(null);
+                      }
+                    }}
+                    aria-label={`Rename ${rank.name}`}
+                    className="rounded-md border border-indigo-400 bg-transparent px-1.5 py-0.5 text-sm font-medium outline-none"
+                  />
+                ) : (
+                  <button
+                    onClick={() => {
+                      setEditing(rank.name);
+                      setDraftName(rank.name);
+                    }}
+                    disabled={busyRank === rank.name}
+                    title="Click to rename"
+                    className="rounded px-1 py-0.5 font-medium hover:bg-zinc-100 disabled:opacity-50 dark:hover:bg-zinc-900"
+                  >
+                    {rank.name}
+                  </button>
+                )}
 
                 <span className="text-xs text-zinc-400">
                   {rank.memberCount === 0
