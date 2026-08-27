@@ -17,8 +17,8 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  /* Coda only ships 400 and 800 — use font-extrabold, not font-bold, so
-     the browser picks a real weight instead of synthesising one. */
+  /* Coda ships only 400 and 800 — stick to those two weights so the
+     browser never has to synthesise one. The navbar uses 400. */
   --font-coda: "Coda", system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }

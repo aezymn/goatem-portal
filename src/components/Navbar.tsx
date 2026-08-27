@@ -42,7 +42,7 @@ export function Navbar() {
             alt=""
             className="h-14 w-auto invert dark:invert-0"
           />
-          <span className="font-coda text-2xl font-extrabold tracking-tight">
+          <span className="font-coda text-xl font-normal tracking-tight">
             Quality Assurance
           </span>
         </Link>
