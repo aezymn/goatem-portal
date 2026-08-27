@@ -36,11 +36,11 @@ export function Navbar() {
               would vanish against the light one. Inverting a white
               transparent PNG yields black and preserves transparency, so
               one file covers both themes. */}
-          {/* eslint-disable-next-line @next/next/no-img-element -- static local asset, no optimisation needed at 28px */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- static local asset, no optimisation needed at this size */}
           <img
             src="/goatem-logo.png"
             alt=""
-            className="h-7 w-auto invert dark:invert-0"
+            className="h-14 w-auto invert dark:invert-0"
           />
           Quality Assurance
         </Link>
