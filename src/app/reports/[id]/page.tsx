@@ -5,7 +5,7 @@ import { db } from "@/db";
 import { bugReports, comments, members } from "@/db/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { tierAtLeast } from "@/lib/permissions";
+import { hasAction } from "@/lib/permissions";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReportActions } from "@/components/ReportActions";
 import { CommentForm } from "@/components/CommentForm";
@@ -51,10 +51,10 @@ export default async function ReportDetailPage({
     .where(and(eq(comments.bugReportId, id), isNull(comments.deletedAt)))
     .orderBy(asc(comments.createdAt));
 
-  const isStaff = tierAtLeast(session?.user?.permissionTier ?? "MEMBER", "STAFF");
-  const isAdmin = tierAtLeast(session?.user?.permissionTier ?? "MEMBER", "ADMIN");
+  const canTriage = session?.user ? hasAction(session.user, "reports.triage") : false;
+  const canDelete = session?.user ? hasAction(session.user, "reports.delete") : false;
 
-  const staffOptions = isStaff
+  const staffOptions = canTriage
     ? await db
         .select({ id: members.id, robloxUsername: members.robloxUsername })
         .from(members)
@@ -84,12 +84,13 @@ export default async function ReportDetailPage({
         )}
       </div>
 
-      {isStaff && (
+      {(canTriage || canDelete) && (
         <ReportActions
           reportId={report.id}
           currentStatus={report.status}
           currentAssigneeId={report.assigneeId}
-          canDelete={isAdmin}
+          canTriage={canTriage}
+          canDelete={canDelete}
           members={staffOptions}
         />
       )}

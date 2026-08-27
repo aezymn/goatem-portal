@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { bugReports, comments } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireTier } from "@/lib/requireSession";
+import { requireRosterMember } from "@/lib/requireSession";
 import { createCommentSchema } from "@/lib/validation";
 import { getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
@@ -12,7 +12,7 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/reports/[id]/comments">
 ) {
-  const auth = await requireTier("MEMBER");
+  const auth = await requireRosterMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const { discordId } = auth.session.user;

@@ -2,14 +2,14 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { bugReports, members } from "@/db/schema";
 import { desc, eq, isNull } from "drizzle-orm";
-import { requireTier } from "@/lib/requireSession";
+import { requireRosterMember } from "@/lib/requireSession";
 import { createReportSchema } from "@/lib/validation";
 import { getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rateLimit";
 
 export async function GET() {
-  const auth = await requireTier("MEMBER");
+  const auth = await requireRosterMember();
   if (!auth.ok) return auth.response;
 
   const rows = await db
@@ -30,7 +30,7 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const auth = await requireTier("MEMBER");
+  const auth = await requireRosterMember();
   if (!auth.ok) return auth.response;
   const { discordId } = auth.session.user;
 

@@ -50,7 +50,7 @@ export default async function Home() {
             Current staff, ranks, and status.
           </p>
         </Link>
-        {session.user.permissionTier === "ADMIN" && (
+        {(session.user.isCreator || session.user.isPortalAdmin) && (
           <Link
             href="/admin/audit-log"
             className="rounded-lg border border-zinc-200 p-5 hover:border-indigo-400 dark:border-zinc-800"

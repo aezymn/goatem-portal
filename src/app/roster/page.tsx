@@ -1,30 +1,25 @@
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
-import { members, rankPermissions } from "@/db/schema";
+import { members } from "@/db/schema";
 import { asc, isNull } from "drizzle-orm";
-import { tierAtLeast } from "@/lib/permissions";
+import { hasAction } from "@/lib/permissions";
 import { AddMemberForm } from "@/components/AddMemberForm";
 import { DeleteMemberButton } from "@/components/DeleteMemberButton";
-import { GrantToggle } from "@/components/GrantToggle";
 
 export const dynamic = "force-dynamic";
 
 export default async function RosterPage() {
   const session = await getServerSession(authOptions);
-  const isAdmin = tierAtLeast(session?.user?.permissionTier ?? "MEMBER", "ADMIN");
+  const canManageRoster = session?.user
+    ? hasAction(session.user, "roster.manage")
+    : false;
 
-  const [rows, eligibilityRows] = await Promise.all([
-    db
-      .select()
-      .from(members)
-      .where(isNull(members.deletedAt))
-      .orderBy(asc(members.rank), asc(members.robloxUsername)),
-    db.select().from(rankPermissions),
-  ]);
-  const eligibilityByRank = new Map(
-    eligibilityRows.map((r) => [r.rank, r.eligibleTier])
-  );
+  const rows = await db
+    .select()
+    .from(members)
+    .where(isNull(members.deletedAt))
+    .orderBy(asc(members.rank), asc(members.robloxUsername));
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,8 +33,7 @@ export default async function RosterPage() {
               <th className="px-4 py-2 font-medium">Rank</th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium">Discord ID</th>
-              {isAdmin && <th className="px-4 py-2 font-medium">Access</th>}
-              {isAdmin && <th className="px-4 py-2" />}
+              {canManageRoster && <th className="px-4 py-2" />}
             </tr>
           </thead>
           <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -51,16 +45,7 @@ export default async function RosterPage() {
                 <td className="px-4 py-2 font-mono text-xs text-zinc-500">
                   {m.discordId ?? "—"}
                 </td>
-                {isAdmin && (
-                  <td className="px-4 py-2">
-                    <GrantToggle
-                      memberId={m.id}
-                      grantedTier={m.grantedTier}
-                      eligibleTier={eligibilityByRank.get(m.rank) ?? null}
-                    />
-                  </td>
-                )}
-                {isAdmin && (
+                {canManageRoster && (
                   <td className="px-4 py-2 text-right">
                     <DeleteMemberButton memberId={m.id} />
                   </td>
@@ -71,7 +56,7 @@ export default async function RosterPage() {
         </table>
       </div>
 
-      {isAdmin && (
+      {canManageRoster && (
         <div className="rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
           <h2 className="mb-3 font-medium">Add someone to the roster</h2>
           <AddMemberForm />

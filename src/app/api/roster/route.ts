@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { members } from "@/db/schema";
 import { asc, isNull } from "drizzle-orm";
-import { requireTier } from "@/lib/requireSession";
+import { requireRosterMember, requireAction } from "@/lib/requireSession";
 import { createMemberSchema } from "@/lib/validation";
 import { getMemberByDiscordId } from "@/lib/members";
+import { ensureRank } from "@/lib/ranks";
 import { logAudit } from "@/lib/audit";
 
 export async function GET() {
-  const auth = await requireTier("MEMBER");
+  const auth = await requireRosterMember();
   if (!auth.ok) return auth.response;
 
   const rows = await db
@@ -20,10 +21,11 @@ export async function GET() {
   return NextResponse.json({ members: rows });
 }
 
-// Adding people to the roster is deliberately ADMIN-only and manual — see
-// SETUP.md for why this isn't a live Roblox group sync in phase 1.
+// Adding people to the roster needs the roster.manage action (full admins
+// always have it too) — manual, not a live Roblox group sync in phase 1,
+// see SETUP.md for why.
 export async function POST(request: Request) {
-  const auth = await requireTier("ADMIN");
+  const auth = await requireAction("roster.manage");
   if (!auth.ok) return auth.response;
   const { discordId } = auth.session.user;
 
@@ -39,6 +41,11 @@ export async function POST(request: Request) {
 
   try {
     const created = await db.transaction(async (tx) => {
+      // Make sure this rank has a row on the Ranks admin page even if
+      // it's never been seen before, so it's immediately configurable
+      // instead of only showing up via a defensive merge.
+      await ensureRank(parsed.data.rank, tx);
+
       const [member] = await tx
         .insert(members)
         .values({

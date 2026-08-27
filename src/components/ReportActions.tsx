@@ -7,6 +7,7 @@ interface Props {
   reportId: string;
   currentStatus: string;
   currentAssigneeId: string | null;
+  canTriage: boolean;
   canDelete: boolean;
   members: { id: string; robloxUsername: string }[];
 }
@@ -15,6 +16,7 @@ export function ReportActions({
   reportId,
   currentStatus,
   currentAssigneeId,
+  canTriage,
   canDelete,
   members,
 }: Props) {
@@ -56,36 +58,40 @@ export function ReportActions({
 
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-lg border border-zinc-200 p-4 dark:border-zinc-800">
-      <label className="flex items-center gap-2 text-sm">
-        Status
-        <select
-          defaultValue={currentStatus}
-          disabled={busy}
-          onChange={(e) => patch({ status: e.target.value })}
-          className="rounded-md border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          <option value="OPEN">Open</option>
-          <option value="IN_PROGRESS">In Progress</option>
-          <option value="RESOLVED">Resolved</option>
-        </select>
-      </label>
+      {canTriage && (
+        <>
+          <label className="flex items-center gap-2 text-sm">
+            Status
+            <select
+              defaultValue={currentStatus}
+              disabled={busy}
+              onChange={(e) => patch({ status: e.target.value })}
+              className="rounded-md border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              <option value="OPEN">Open</option>
+              <option value="IN_PROGRESS">In Progress</option>
+              <option value="RESOLVED">Resolved</option>
+            </select>
+          </label>
 
-      <label className="flex items-center gap-2 text-sm">
-        Assignee
-        <select
-          defaultValue={currentAssigneeId ?? ""}
-          disabled={busy}
-          onChange={(e) => patch({ assigneeId: e.target.value || null })}
-          className="rounded-md border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
-        >
-          <option value="">Unassigned</option>
-          {members.map((m) => (
-            <option key={m.id} value={m.id}>
-              {m.robloxUsername}
-            </option>
-          ))}
-        </select>
-      </label>
+          <label className="flex items-center gap-2 text-sm">
+            Assignee
+            <select
+              defaultValue={currentAssigneeId ?? ""}
+              disabled={busy}
+              onChange={(e) => patch({ assigneeId: e.target.value || null })}
+              className="rounded-md border border-zinc-300 px-2 py-1 dark:border-zinc-700 dark:bg-zinc-900"
+            >
+              <option value="">Unassigned</option>
+              {members.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.robloxUsername}
+                </option>
+              ))}
+            </select>
+          </label>
+        </>
+      )}
 
       {canDelete && (
         <button

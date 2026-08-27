@@ -1,66 +1,58 @@
-// Permission tiers. Deliberately NOT derived from Discord roles — see
-// resolveGrantedTier below for why. Discord OAuth (src/lib/auth.ts) only
-// ever answers "is this person currently a member of the guild" (the
-// login gate); it has no say in what they can DO once they're in.
+// The access model, top to bottom:
+//
+//   1. CREATOR — the Discord server's actual owner. Computed live from
+//      their own OAuth token at login/recheck (src/lib/auth.ts), never
+//      stored, never grantable or revocable through the app. Always has
+//      full access to everything, and is the ONLY one who can promote or
+//      demote a portal ADMIN (below).
+//   2. Portal ADMIN — members.isPortalAdmin. A specific, named person the
+//      CREATOR has explicitly designated on the Admin Access panel. Full
+//      access to everything except designating other admins.
+//   3. Rank-granted actions — everyone else's access comes entirely from
+//      whatever actions their current rank has been configured with (the
+//      Ranks admin page), from the fixed catalog below. A rank granting
+//      nothing means holding it grants nothing beyond the baseline.
+//   4. Baseline — anyone with an active roster row (regardless of rank)
+//      can view the roster and file/view/comment on bug reports. This
+//      isn't gated by an "action" at all; see requireRosterMember() in
+//      src/lib/requireSession.ts.
+//
+// The deliberate split between #2 and #3 is the whole point: whoever
+// manages ranks or Discord roles might not be trusted with full access,
+// so a rank — however it's configured — can never reach portal-admin.
+// Only the CREATOR, a single fixed identity Discord itself defines, can
+// hand that out. See src/lib/auth.ts and src/lib/ranks.ts for how each
+// piece gets resolved.
 
-export type PermissionTier = "ADMIN" | "STAFF" | "MEMBER";
-export type GrantableTier = "STAFF" | "ADMIN";
+export const RANK_ACTIONS = [
+  "reports.triage",
+  "reports.delete",
+  "roster.manage",
+] as const;
 
-const TIER_RANK: Record<PermissionTier, number> = {
-  MEMBER: 0,
-  STAFF: 1,
-  ADMIN: 2,
-};
+export type RankAction = (typeof RANK_ACTIONS)[number];
 
-/** True if `actual` meets or exceeds `required` in the tier hierarchy. */
-export function tierAtLeast(
-  actual: PermissionTier,
-  required: PermissionTier
-): boolean {
-  return TIER_RANK[actual] >= TIER_RANK[required];
+export function isRankAction(value: string): value is RankAction {
+  return (RANK_ACTIONS as readonly string[]).includes(value);
 }
 
-/**
- * A person's actual permission tier is a deliberate two-part gate:
- *
- *   1. Their RANK's eligibleTier (rank_permissions table, managed on the
- *      Permissions admin page) — a ceiling on what someone of that rank
- *      is even allowed to be granted. This is config, not a grant.
- *   2. Their own grantedTier (members.granted_tier) — an explicit,
- *      per-person decision an admin made about THIS specific person,
- *      capped by #1 at grant time.
- *
- * Both must line up for elevated access to actually apply. The point:
- * someone getting handed a rank — by whoever manages Discord roles, which
- * might not even be a portal admin — never silently hands them portal
- * access along with it. A named admin has to have actually looked at this
- * specific person and decided yes. If their rank's eligibility is later
- * lowered below their existing grant, the grant stops applying
- * immediately — no separate cleanup step needed.
- */
-export function resolveTier(
-  grantedTier: GrantableTier | null,
-  rankEligibleTier: GrantableTier | null
-): PermissionTier {
-  if (!grantedTier || !rankEligibleTier) return "MEMBER";
-  // The LOWER of the two wins — a grant can never exceed what the
-  // person's current rank is eligible for, even if it was set before
-  // their rank's eligibility was later turned down.
-  const effective = Math.min(TIER_RANK[grantedTier], TIER_RANK[rankEligibleTier]);
-  if (effective >= TIER_RANK.ADMIN) return "ADMIN";
-  if (effective >= TIER_RANK.STAFF) return "STAFF";
-  return "MEMBER";
+/** What a request's session resolves to — everything requireSession.ts
+ * and the pages need to decide what someone can see or do. */
+export interface AccessContext {
+  isCreator: boolean;
+  isPortalAdmin: boolean;
+  actions: RankAction[];
 }
 
-/** Server-side guard for the API route that actually sets a grant: is
- * `candidate` permitted under a rank's `ceiling` (its eligibleTier)? Used
- * so a request can never grant more than the rank is currently configured
- * for, even if someone crafts the request by hand rather than using the
- * roster toggle. */
-export function isGrantAllowed(
-  candidate: GrantableTier,
-  ceiling: GrantableTier | null
-): boolean {
-  if (!ceiling) return false;
-  return TIER_RANK[candidate] <= TIER_RANK[ceiling];
+/** True if `ctx` has full access — CREATOR or a designated portal ADMIN.
+ * Both bypass the rank-action list entirely; an admin isn't limited to
+ * whatever their own rank happens to grant. */
+export function isFullAdmin(ctx: AccessContext): boolean {
+  return ctx.isCreator || ctx.isPortalAdmin;
+}
+
+/** True if `ctx` can perform `action` — full admins always can; everyone
+ * else needs their rank to have been explicitly granted it. */
+export function hasAction(ctx: AccessContext, action: RankAction): boolean {
+  return isFullAdmin(ctx) || ctx.actions.includes(action);
 }

@@ -17,6 +17,7 @@
 
 interface DiscordRole {
   id: string;
+  name: string;
   color: number; // decimal RGB, 0 means "no color / use default"
   position: number;
 }
@@ -144,4 +145,20 @@ export async function getGuildMemberInfo(
     memberCache.set(discordId, { info: null, fetchedAt: Date.now() });
     return null;
   }
+}
+
+/**
+ * The guild's roles, id/name/position only — used to populate the "bind
+ * this rank to a Discord role" picker on the Ranks admin page. Returns an
+ * empty array (never throws) if the bot isn't configured or the lookup
+ * fails, so that page can still render with binding simply unavailable.
+ */
+export async function listGuildRoles(): Promise<
+  { id: string; name: string }[]
+> {
+  const roles = await fetchGuildRoles();
+  if (!roles) return [];
+  return [...roles]
+    .sort((a, b) => b.position - a.position)
+    .map((r) => ({ id: r.id, name: r.name }));
 }

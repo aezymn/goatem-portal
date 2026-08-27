@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireTier } from "@/lib/requireSession";
+import { requireRosterMember } from "@/lib/requireSession";
 import { getMemberByDiscordId } from "@/lib/members";
 import { getGuildMemberInfo } from "@/lib/discordBot";
 
@@ -10,7 +10,7 @@ import { getGuildMemberInfo } from "@/lib/discordBot";
 // or a bot that isn't set up yet, still gets a sensible response instead
 // of a broken navbar.
 export async function GET() {
-  const auth = await requireTier("MEMBER");
+  const auth = await requireRosterMember();
   if (!auth.ok) return auth.response;
   const { discordId } = auth.session.user;
 

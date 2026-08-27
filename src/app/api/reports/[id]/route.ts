@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { bugReports, comments, members } from "@/db/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
-import { requireTier } from "@/lib/requireSession";
+import { requireRosterMember, requireAction } from "@/lib/requireSession";
 import { updateReportSchema } from "@/lib/validation";
 import { getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
@@ -14,7 +14,7 @@ export async function GET(
   _request: Request,
   ctx: RouteContext<"/api/reports/[id]">
 ) {
-  const auth = await requireTier("MEMBER");
+  const auth = await requireRosterMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
 
@@ -55,13 +55,13 @@ export async function GET(
   return NextResponse.json({ report, comments: reportComments });
 }
 
-// Status/assignee changes are STAFF+ only — filing and commenting are open
-// to any roster member, but triaging is a staff action.
+// Status/assignee changes need the reports.triage action — filing and
+// commenting are open to any roster member, but triaging isn't.
 export async function PATCH(
   request: Request,
   ctx: RouteContext<"/api/reports/[id]">
 ) {
-  const auth = await requireTier("STAFF");
+  const auth = await requireAction("reports.triage");
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const { discordId } = auth.session.user;
@@ -134,13 +134,13 @@ export async function PATCH(
   return NextResponse.json({ report: updated });
 }
 
-// Soft delete only, ADMIN+ — see schema notes on why nothing is ever
-// actually removed from the database through this app.
+// Soft delete only, needs reports.delete — see schema notes on why
+// nothing is ever actually removed from the database through this app.
 export async function DELETE(
   _request: Request,
   ctx: RouteContext<"/api/reports/[id]">
 ) {
-  const auth = await requireTier("ADMIN");
+  const auth = await requireAction("reports.delete");
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const { discordId } = auth.session.user;

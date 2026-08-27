@@ -17,6 +17,9 @@ import {
   timestamp,
   jsonb,
   pgEnum,
+  integer,
+  boolean,
+  primaryKey,
   index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
@@ -28,22 +31,47 @@ export const reportStatusEnum = pgEnum("report_status", [
   "RESOLVED",
 ]);
 
-// A rank being "eligible" for a tier only controls what an admin is
-// ALLOWED to grant someone of that rank — it never grants access by
-// itself. See members.grantedTier below and src/lib/permissions.ts for
-// why that split matters: it's the difference between "this rank is
-// normally trusted with triage" and "this specific person has actually
-// been handed that trust" — someone getting handed a rank by whoever
-// manages Discord roles doesn't silently inherit portal access with it.
-export const tierEnum = pgEnum("tier", ["STAFF", "ADMIN"]);
-
-export const rankPermissions = pgTable("rank_permissions", {
-  rank: text("rank").primaryKey(),
-  eligibleTier: tierEnum("eligible_tier"), // null = not eligible for anything
+// The rank ladder. `position` is the authority order an admin sets by
+// dragging ranks around on the Ranks page (lower number = higher
+// authority — position 0 is the top of the list). `discordRoleId` is an
+// optional binding to a live Discord role, purely informational/for
+// future auto-sync — it plays no part in permission resolution.
+//
+// A rank granting no rows in rankActionPermissions grants nothing beyond
+// the baseline every roster member gets (view roster, file/view/comment
+// on reports). See src/lib/permissions.ts for the full access model,
+// including why full portal-admin access is deliberately NOT one of these
+// per-rank actions.
+export const ranks = pgTable("ranks", {
+  name: text("name").primaryKey(),
+  position: integer("position").notNull(),
+  discordRoleId: text("discord_role_id").unique(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
 });
+
+// Which specific actions a rank grants to anyone holding it — e.g.
+// "reports.triage". See RANK_ACTIONS in src/lib/permissions.ts for the
+// fixed catalog of valid action strings. Deliberately a loose text
+// column rather than a pg enum: adding a new grantable action later is
+// then just a code change, no migration.
+export const rankActionPermissions = pgTable(
+  "rank_action_permissions",
+  {
+    rank: text("rank")
+      .notNull()
+      .references(() => ranks.name, { onDelete: "cascade" }),
+    action: text("action").notNull(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.rank, table.action] }),
+    index("rank_action_permissions_rank_idx").on(table.rank),
+  ]
+);
 
 export const members = pgTable(
   "members",
@@ -54,11 +82,13 @@ export const members = pgTable(
     rank: text("rank").notNull(),
     status: text("status"),
     notes: text("notes"),
-    // The actual, explicit grant — set only by an admin, only up to what
-    // this person's current rank is eligible for (enforced in the API,
-    // not just the UI). Null means MEMBER: can view, file, and comment,
-    // nothing more, regardless of rank.
-    grantedTier: tierEnum("granted_tier"),
+    // Full portal-admin access, independent of rank entirely. Can ONLY be
+    // set true/false by the guild's CREATOR (Discord server owner — see
+    // src/lib/auth.ts) via the Admin Access panel, never through the
+    // regular roster edit form and never derivable from a rank. This is
+    // the one guard against "whoever hands out ranks/Discord roles can
+    // hand out full access" — see src/lib/permissions.ts.
+    isPortalAdmin: boolean("is_portal_admin").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -169,7 +199,8 @@ export const commentsRelations = relations(comments, ({ one }) => ({
 
 export type Member = typeof members.$inferSelect;
 export type NewMember = typeof members.$inferInsert;
-export type RankPermission = typeof rankPermissions.$inferSelect;
+export type Rank = typeof ranks.$inferSelect;
+export type RankActionPermission = typeof rankActionPermissions.$inferSelect;
 export type BugReport = typeof bugReports.$inferSelect;
 export type NewBugReport = typeof bugReports.$inferInsert;
 export type Comment = typeof comments.$inferSelect;

@@ -14,6 +14,7 @@ interface Me {
 export function Navbar() {
   const { data: session, status } = useSession();
   const authed = status === "authenticated" && !session?.stale;
+  const isAdmin = authed && (session.user.isCreator || session.user.isPortalAdmin);
 
   const [me, setMe] = useState<Me | null>(null);
   useEffect(() => {
@@ -43,15 +44,10 @@ export function Navbar() {
               <Link href="/roster" className="hover:underline">
                 Roster
               </Link>
-              {session.user.permissionTier === "ADMIN" && (
-                <>
-                  <Link href="/admin/permissions" className="hover:underline">
-                    Permissions
-                  </Link>
-                  <Link href="/admin/audit-log" className="hover:underline">
-                    Audit Log
-                  </Link>
-                </>
+              {isAdmin && (
+                <Link href="/admin/ranks" className="hover:underline">
+                  Admin
+                </Link>
               )}
             </>
           )}
@@ -93,58 +89,63 @@ function UserChip({
   }, []);
 
   const displayName = me?.robloxUsername ?? session.user.name ?? "Signed in";
-  // Deliberately the roster's organization rank, not the MEMBER/STAFF/ADMIN
-  // permission tier — that tier controls access, but it's not what anyone
-  // here would call their "rank."
+  // Deliberately the roster's organization rank, not what the person can
+  // actually DO (permissions) — that's a separate concept, see
+  // src/lib/permissions.ts. Not on the roster yet still gets a badge, just
+  // an honest one.
   const rankLabel = me?.rank ?? "Not on roster yet";
 
   return (
-    <div className="flex items-center gap-2">
-      {/* The pill: avatar, name, and rank in one horizontal group */}
-      <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-100 py-1 pl-1 pr-4 dark:border-zinc-800 dark:bg-zinc-900">
-        {me?.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- external, bot-sourced Discord CDN avatar
-          <img
-            src={me.avatarUrl}
-            alt=""
-            className="h-8 w-8 rounded-full object-cover"
-          />
-        ) : (
-          <div className="h-8 w-8 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-        )}
-        <div className="flex flex-col leading-tight">
-          <span className="font-medium">{displayName}</span>
-          <span
-            className="text-xs"
-            style={{ color: me?.roleColorHex ?? undefined }}
-          >
-            {rankLabel}
-          </span>
-        </div>
-      </div>
+    <div className="flex items-center gap-1.5">
+      {session.user.isCreator && (
+        <span className="whitespace-nowrap rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+          Creator
+        </span>
+      )}
 
-      {/* Settings button: separate from the pill, opens sign-out (and
-          whatever else lands here later) in a small dropdown. */}
+      <span
+        className="whitespace-nowrap rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:border-zinc-800 dark:text-zinc-300"
+        style={{ color: me?.roleColorHex ?? undefined }}
+      >
+        {rankLabel}
+      </span>
+
+      {/* The main pill: avatar, name, and the settings control all inside
+          one shape, rather than settings living as a separate button. */}
       <div className="relative" ref={menuRef}>
-        <button
-          onClick={() => setMenuOpen((v) => !v)}
-          aria-label="Settings"
-          className="flex h-9 w-9 items-center justify-center rounded-full border border-zinc-200 hover:bg-zinc-100 dark:border-zinc-800 dark:hover:bg-zinc-800"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            strokeLinecap="round"
-            className="h-4 w-4"
+        <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-100 py-1 pl-1 pr-1 dark:border-zinc-800 dark:bg-zinc-900">
+          {me?.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- external, bot-sourced Discord CDN avatar
+            <img
+              src={me.avatarUrl}
+              alt=""
+              className="h-8 w-8 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-8 w-8 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+          )}
+          <span className="pr-1 font-medium">{displayName}</span>
+
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            aria-label="Settings"
+            className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"
           >
-            <line x1="4" y1="7" x2="20" y2="7" />
-            <line x1="4" y1="12" x2="20" y2="12" />
-            <line x1="4" y1="17" x2="20" y2="17" />
-          </svg>
-        </button>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              className="h-4 w-4"
+            >
+              <line x1="4" y1="7" x2="20" y2="7" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="17" x2="20" y2="17" />
+            </svg>
+          </button>
+        </div>
 
         {menuOpen && (
           <div className="absolute right-0 top-11 z-10 w-40 rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
