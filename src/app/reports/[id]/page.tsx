@@ -6,6 +6,7 @@ import { bugReports, comments, members } from "@/db/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { hasAction } from "@/lib/permissions";
+import { displayNameFor } from "@/lib/members";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ReportActions } from "@/components/ReportActions";
 import { CommentForm } from "@/components/CommentForm";
@@ -56,7 +57,12 @@ export default async function ReportDetailPage({
 
   const staffOptions = canTriage
     ? await db
-        .select({ id: members.id, robloxUsername: members.robloxUsername })
+        .select({
+          id: members.id,
+          robloxUsername: members.robloxUsername,
+          discordUsername: members.discordUsername,
+          discordId: members.discordId,
+        })
         .from(members)
         .where(isNull(members.deletedAt))
     : [];
@@ -91,7 +97,7 @@ export default async function ReportDetailPage({
           currentAssigneeId={report.assigneeId}
           canTriage={canTriage}
           canDelete={canDelete}
-          members={staffOptions}
+          members={staffOptions.map((m) => ({ id: m.id, name: displayNameFor(m) }))}
         />
       )}
 

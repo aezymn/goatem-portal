@@ -162,3 +162,81 @@ export async function listGuildRoles(): Promise<
     .sort((a, b) => b.position - a.position)
     .map((r) => ({ id: r.id, name: r.name }));
 }
+
+export interface GuildMemberSummary {
+  discordId: string;
+  /** Server nickname if set, else the account's display name, else the
+   * raw username — i.e. what you'd actually see in the member list. */
+  displayName: string;
+  roleIds: string[];
+}
+
+/**
+ * Every member of the guild, with their roles. Unlike every other lookup
+ * in this file, this one REQUIRES the privileged "Server Members Intent"
+ * to be enabled on the bot (Developer Portal → Bot → Privileged Gateway
+ * Intents). Without it Discord answers 403 and this returns null — which
+ * callers surface as a clear setup message rather than "0 members", since
+ * those mean very different things.
+ *
+ * Paginates in 1000s (Discord's maximum per page) using the `after`
+ * cursor, so it works past the first thousand members.
+ */
+export async function listGuildMembers(): Promise<
+  GuildMemberSummary[] | null
+> {
+  const headers = botHeaders();
+  const guildId = process.env.DISCORD_GUILD_ID;
+  if (!headers || !guildId) return null;
+
+  const collected: GuildMemberSummary[] = [];
+  let after = "0";
+
+  try {
+    // Bounded rather than `while (true)`: 50 pages is 50k members, far
+    // past this guild's plausible size, and guarantees termination even
+    // if Discord's cursor behaves unexpectedly.
+    for (let page = 0; page < 50; page++) {
+      const res = await fetch(
+        `https://discord.com/api/v10/guilds/${guildId}/members?limit=1000&after=${after}`,
+        { headers }
+      );
+      if (!res.ok) {
+        console.error(
+          "guild member list failed:",
+          res.status,
+          res.status === 403
+            ? "(most likely the Server Members Intent is not enabled)"
+            : ""
+        );
+        return null;
+      }
+
+      const batch = (await res.json()) as {
+        user?: { id?: string; username?: string; global_name?: string | null };
+        nick?: string | null;
+        roles?: string[];
+      }[];
+      if (!Array.isArray(batch) || batch.length === 0) break;
+
+      for (const m of batch) {
+        const id = m.user?.id;
+        if (!id) continue;
+        collected.push({
+          discordId: id,
+          displayName:
+            m.nick ?? m.user?.global_name ?? m.user?.username ?? id,
+          roleIds: Array.isArray(m.roles) ? m.roles : [],
+        });
+      }
+
+      if (batch.length < 1000) break;
+      after = collected[collected.length - 1].discordId;
+    }
+
+    return collected;
+  } catch (err) {
+    console.error("guild member list threw:", err);
+    return null;
+  }
+}

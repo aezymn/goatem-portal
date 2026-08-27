@@ -1,6 +1,6 @@
 import type { AuthOptions } from "next-auth";
 import DiscordProvider from "next-auth/providers/discord";
-import { getMemberByDiscordId } from "@/lib/members";
+import { getMemberByDiscordId, markSignedIn } from "@/lib/members";
 import { getRankActions } from "@/lib/ranks";
 import { isCreatorDiscordId } from "@/lib/permissions";
 import type { RankAction } from "@/lib/permissions";
@@ -13,22 +13,59 @@ import type { RankAction } from "@/lib/permissions";
 const RECHECK_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
 
 /**
- * Confirms the caller is currently a member of the studio's Discord
+ * The outcome of a guild-membership check. Deliberately four states, not
+ * a boolean: "we asked Discord and they are not in the server" and "we
+ * couldn't ask Discord" are completely different facts, and collapsing
+ * them means a rate limit or an outage tells someone they've been kicked
+ * out of the studio. That is exactly the bug this type exists to prevent.
+ */
+type MembershipStatus =
+  | "member"
+  | "not-member" // Discord answered: they really aren't in the guild
+  | "unauthorized" // token rejected, or missing the guilds.members.read scope
+  | "unavailable"; // rate limited, Discord 5xx, network failure — unknown
+
+/**
+ * Checks whether the caller is currently a member of the studio's Discord
  * guild, using their own OAuth access token (scope: guilds.members.read)
  * — no bot token or special intents required. This is ONLY a login gate;
  * it says nothing about what they can do once they're in. CREATOR status,
  * portal-admin, and rank actions are all resolved separately — see
  * src/lib/permissions.ts.
  */
-async function isGuildMember(accessToken: string): Promise<boolean> {
+async function checkGuildMembership(
+  accessToken: string
+): Promise<MembershipStatus> {
   const guildId = process.env.DISCORD_GUILD_ID;
   if (!guildId) throw new Error("DISCORD_GUILD_ID is not configured");
 
-  const res = await fetch(
-    `https://discord.com/api/v10/users/@me/guilds/${guildId}/member`,
-    { headers: { Authorization: `Bearer ${accessToken}` } }
+  let res: Response;
+  try {
+    res = await fetch(
+      `https://discord.com/api/v10/users/@me/guilds/${guildId}/member`,
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+  } catch (err) {
+    console.error("[auth] guild membership check threw:", err);
+    return "unavailable";
+  }
+
+  if (res.ok) return "member";
+
+  // Logged with the status so the real cause is visible in the hosting
+  // logs rather than having to be inferred from a generic rejection.
+  console.error(
+    `[auth] guild membership check failed: HTTP ${res.status}`,
+    res.status === 429
+      ? "(rate limited by Discord)"
+      : res.status === 401 || res.status === 403
+        ? "(token rejected or missing the guilds.members.read scope)"
+        : ""
   );
-  return res.ok; // false = not a member, revoked token, rate limited, etc.
+
+  if (res.status === 404) return "not-member";
+  if (res.status === 401 || res.status === 403) return "unauthorized";
+  return "unavailable";
 }
 
 /** Looks up this person's roster row and resolves the actions their
@@ -67,23 +104,37 @@ export const authOptions: AuthOptions = {
   callbacks: {
     async signIn({ account, profile }) {
       if (!account?.access_token || !profile) return false;
-      // Reject sign-in outright for anyone who isn't currently in the
-      // studio's Discord guild — this is the front door, not just a
-      // display filter.
-      return isGuildMember(account.access_token);
+
+      // Reject sign-in for anyone who isn't currently in the studio's
+      // Discord guild — this is the front door, not just a display
+      // filter. But say WHICH failure it was: returning a URL here sends
+      // a specific code to the sign-in page, so a rate limit or a scope
+      // problem doesn't get reported to someone as "you're not in the
+      // server", which is both wrong and impossible to act on.
+      const status = await checkGuildMembership(account.access_token);
+      switch (status) {
+        case "member":
+          return true;
+        case "not-member":
+          return "/sign-in?error=NotInGuild";
+        case "unauthorized":
+          return "/sign-in?error=ScopeRejected";
+        case "unavailable":
+          return "/sign-in?error=DiscordUnavailable";
+      }
     },
     async jwt({ token, account, profile }) {
       const isInitialSignIn = Boolean(account && profile);
 
       if (isInitialSignIn && account?.access_token) {
-        // We already know `signIn` succeeded, so this should too. If it
-        // somehow doesn't (race, Discord hiccup), fail closed rather than
-        // issue a token that looks valid but isn't.
-        if (!(await isGuildMember(account.access_token))) {
-          token.invalid = true;
-          return token;
-        }
+        // `signIn` already established membership moments ago; re-asking
+        // here would only add a second call (and a second chance to trip
+        // a rate limit) to prove the same thing. next-auth will not reach
+        // this callback at all unless signIn returned true.
         const discordId = (profile as { id: string }).id;
+        // Being on the roster no longer implies having signed in, so
+        // record the fact here — this is the only moment we know it.
+        await markSignedIn(discordId);
         token.discordId = discordId;
         token.isCreator = isCreatorDiscordId(discordId);
         token.isPortalAdmin = await computeIsPortalAdmin(discordId);
@@ -100,9 +151,18 @@ export const authOptions: AuthOptions = {
         Date.now() - token.rolesCheckedAt > RECHECK_INTERVAL_MS;
 
       if (dueForRecheck && token.accessToken && token.discordId) {
-        if (!(await isGuildMember(token.accessToken))) {
-          // No longer a guild member, or the access token has
-          // expired/been revoked. Either way: stop trusting this session.
+        const status = await checkGuildMembership(token.accessToken);
+
+        // Only a definitive answer ends a live session. If Discord is
+        // rate limiting us or having a bad day, keep the session as-is
+        // and leave rolesCheckedAt untouched so the next request retries
+        // promptly — rather than logging out the whole studio over a
+        // transient 429.
+        if (status === "unavailable") {
+          return token;
+        }
+
+        if (status === "not-member" || status === "unauthorized") {
           token.invalid = true;
           token.isCreator = false;
           token.isPortalAdmin = false;

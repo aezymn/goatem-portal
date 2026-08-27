@@ -79,6 +79,10 @@ up automatically within about a minute.
    - `DISCORD_GUILD_ID` and `PORTAL_CREATOR_DISCORD_ID` — from step 5
      below. The second one is what gives you full access; without it
      nobody is CREATOR and nobody can appoint admins.
+   - `ROBLOX_GROUP_ID` — your Roblox group's number, for the roster's
+     GAME ACCESS column. Bare number, no quotes.
+   - `DISCORD_BOT_TOKEN` — from step 6. Now required rather than
+     optional: roster sync reads the guild's member list through it.
    - `AUDIT_WEBHOOK_URL` — optional, from step 6 below.
 3. Click **Deploy**. First deploy takes a minute or two.
 4. Once it's live, Vercel shows you a URL like
@@ -163,6 +167,40 @@ reports" on their rank — there's no need to make anyone an Admin just for
 that. Admin is for the handful of people who should be able to touch the
 roster, the rank ladder, and the audit log.
 
+## 5c. How the roster fills itself
+
+You don't add people by hand any more (though you still can — see the
+"Add someone manually" section at the bottom of the Roster page, for
+anyone who isn't in Discord).
+
+1. **Bind a Discord role to each rank** on the Ranks page. That binding is
+   now load-bearing: holding a bound role is what puts someone on the
+   roster, at that rank. Someone holding several bound roles gets the
+   highest-authority one — whichever sits nearest the top of the Ranks
+   page.
+2. **Press "Sync from Discord"** on the Roster page. Everyone holding a
+   bound role appears, with their Discord name. Losing the role removes
+   them again on the next sync (a soft delete — regaining the role
+   restores the same row rather than making a new one). Manually-added
+   people and alt accounts are never touched by a sync.
+3. **They link their own Roblox account** the first time they sign in,
+   from the panel at the bottom of the Roster page. They can also add
+   alt/testing accounts there, each of which becomes its own roster row
+   marked "alt" with its own access result.
+
+The roster's two status columns:
+
+- **GAME ACCESS** — whether that Roblox account is in the group named by
+  `ROBLOX_GROUP_ID`. Shows "unknown" (not "no access") when the account
+  isn't linked yet, no group is configured, or Roblox couldn't be reached
+  — those are different facts from a confirmed no.
+- **SIGNED IN** — whether that person has ever actually logged into the
+  portal. Being on the roster no longer implies it, since they're placed
+  there from Discord without any involvement on their part.
+
+Discord IDs no longer have their own column: hover the Discord name to
+see the ID, click to copy it.
+
 ## 6. Optional: real avatars and Discord role colors
 
 Login works fine without this — it's purely for showing people's actual
@@ -178,8 +216,11 @@ API requests from Apps Script's shared, flagged IP pool, not from Vercel's
 1. On that same application in the Discord Developer Portal, click **Bot**
    in the left sidebar → **Add Bot** (or **Reset Token** if a bot already
    exists there) → copy the token. This is `DISCORD_BOT_TOKEN` in Vercel.
-   You do **not** need to enable any "Privileged Gateway Intents" toggles
-   on this page — the lookups this uses don't need them.
+1b. **Enable the "Server Members Intent"** on that same Bot page, under
+   **Privileged Gateway Intents**. This one is required — reading the
+   guild's member list is a privileged operation, and roster sync (§5c)
+   cannot work without it. Avatars and role colours work without it,
+   because single-member lookups aren't privileged; the bulk list is.
 2. Invite the bot to your server: **OAuth2 → URL Generator**, check the
    **bot** scope, pick a minimal permission like "View Channels" (the
    lookups this app does don't actually need any permission bits, Discord

@@ -5,7 +5,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 import { requireRosterMember, requireAction } from "@/lib/requireSession";
 import { updateReportSchema } from "@/lib/validation";
-import { getMemberByDiscordId } from "@/lib/members";
+import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 
 const assignee = alias(members, "assignee");
@@ -115,7 +115,7 @@ export async function PATCH(
 
     await logAudit(tx, {
       actorDiscordId: discordId,
-      actorName: actor.robloxUsername,
+      actorName: displayNameFor(actor),
       action: "report.update",
       targetType: "bug_report",
       targetId: id,
@@ -163,7 +163,7 @@ export async function DELETE(
 
     await logAudit(tx, {
       actorDiscordId: discordId,
-      actorName: actor.robloxUsername,
+      actorName: displayNameFor(actor),
       action: "report.delete",
       targetType: "bug_report",
       targetId: id,

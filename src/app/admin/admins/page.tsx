@@ -23,7 +23,12 @@ export default async function AdminsPage() {
   }
 
   const admins = await db
-    .select()
+    .select({
+      id: members.id,
+      robloxUsername: members.robloxUsername,
+      discordUsername: members.discordUsername,
+      rank: members.rank,
+    })
     .from(members)
     .where(and(eq(members.isPortalAdmin, true), isNull(members.deletedAt)))
     .orderBy(asc(members.robloxUsername));

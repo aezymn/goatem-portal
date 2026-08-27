@@ -9,7 +9,9 @@ interface Props {
   currentAssigneeId: string | null;
   canTriage: boolean;
   canDelete: boolean;
-  members: { id: string; robloxUsername: string }[];
+  /** Pre-resolved display names — a roster row may have no Roblox
+   * username yet (see displayNameFor in src/lib/members.ts). */
+  members: { id: string; name: string }[];
 }
 
 export function ReportActions({
@@ -85,7 +87,7 @@ export function ReportActions({
               <option value="">Unassigned</option>
               {members.map((m) => (
                 <option key={m.id} value={m.id}>
-                  {m.robloxUsername}
+                  {m.name}
                 </option>
               ))}
             </select>

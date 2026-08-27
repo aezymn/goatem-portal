@@ -62,3 +62,24 @@ export const setRankActionSchema = z.object({
 export const addAdminSchema = z.object({
   memberId: z.string().trim().min(1).max(64),
 });
+
+// Roblox usernames: 3-20 characters, letters/digits/underscore, and at
+// most one underscore which can't be at either end. Validating the shape
+// here means an obviously-invalid entry never costs a Roblox API call.
+export const robloxUsernameSchema = z
+  .string()
+  .trim()
+  .min(3, "Roblox usernames are at least 3 characters")
+  .max(20, "Roblox usernames are at most 20 characters")
+  .regex(
+    /^(?!_)(?!.*_.*_)[A-Za-z0-9_]+(?<!_)$/,
+    "That isn't a valid Roblox username"
+  );
+
+export const linkRobloxSchema = z.object({
+  robloxUsername: robloxUsernameSchema,
+});
+
+export const addAltSchema = z.object({
+  robloxUsername: robloxUsernameSchema,
+});

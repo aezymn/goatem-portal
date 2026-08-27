@@ -5,8 +5,15 @@ import { useRouter } from "next/navigation";
 
 interface MemberRow {
   id: string;
-  robloxUsername: string;
+  /** May be null: people reach the roster from Discord before linking a
+   * Roblox account. `name` below is what actually gets displayed. */
+  robloxUsername: string | null;
+  discordUsername: string | null;
   rank: string;
+}
+
+function nameOf(m: MemberRow): string {
+  return m.robloxUsername ?? m.discordUsername ?? "Unknown member";
 }
 
 export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
@@ -55,7 +62,7 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
   async function addAdmin(member: MemberRow) {
     if (
       !confirm(
-        `Give ${member.robloxUsername} full admin access to the portal? This includes managing the roster, ranks, and everything else — are you sure?`
+        `Give ${nameOf(member)} full admin access to the portal? This includes managing the roster, ranks, and everything else — are you sure?`
       )
     ) {
       return;
@@ -80,7 +87,7 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
   async function removeAdmin(member: MemberRow) {
     if (
       !confirm(
-        `Remove ${member.robloxUsername}'s admin access? They'll fall back to whatever their rank grants.`
+        `Remove ${nameOf(member)}'s admin access? They'll fall back to whatever their rank grants.`
       )
     ) {
       return;
@@ -109,7 +116,7 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
               className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-2 dark:border-zinc-800"
             >
               <div>
-                <span className="font-medium">{m.robloxUsername}</span>
+                <span className="font-medium">{nameOf(m)}</span>
                 <span className="ml-2 text-xs text-zinc-500">{m.rank}</span>
               </div>
               <button
@@ -153,7 +160,7 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
                 className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-2 dark:border-zinc-800"
               >
                 <div>
-                  <span className="font-medium">{m.robloxUsername}</span>
+                  <span className="font-medium">{nameOf(m)}</span>
                   <span className="ml-2 text-xs text-zinc-500">{m.rank}</span>
                 </div>
                 <button

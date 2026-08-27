@@ -29,13 +29,38 @@
 // piece gets resolved.
 
 /**
+ * The Discord ID configured as CREATOR, or null if none is.
+ *
+ * Tolerates surrounding quotes and whitespace: a .env file strips quotes
+ * when it loads, but a hosting dashboard (Vercel's env var UI, say)
+ * stores whatever is typed verbatim — so pasting `"123..."` there, in the
+ * same format .env.example shows, silently stored the quote characters
+ * and never matched anyone. Failing closed on a misconfiguration is
+ * right; failing closed on a *plausible transcription* of the right
+ * answer is just a trap.
+ */
+function configuredCreatorId(): string | null {
+  const raw = process.env.PORTAL_CREATOR_DISCORD_ID?.trim();
+  if (!raw) return null;
+  const unquoted = raw.replace(/^['"]+|['"]+$/g, "").trim();
+  return unquoted || null;
+}
+
+/** Whether a CREATOR is configured at all — booleans only, no value.
+ * Used by the /api/whoami diagnostic to tell "nobody is configured"
+ * apart from "someone is, but it isn't you." */
+export function isCreatorConfigured(): boolean {
+  return configuredCreatorId() !== null;
+}
+
+/**
  * True only for the one Discord account named by
  * PORTAL_CREATOR_DISCORD_ID. Returns false when that variable is unset
  * or blank — failing closed, so a misconfigured deploy grants nobody
  * CREATOR rather than everybody.
  */
 export function isCreatorDiscordId(discordId: string | undefined): boolean {
-  const configured = process.env.PORTAL_CREATOR_DISCORD_ID?.trim();
+  const configured = configuredCreatorId();
   if (!configured || !discordId) return false;
   return discordId === configured;
 }

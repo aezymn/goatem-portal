@@ -25,7 +25,7 @@ async function main() {
       .returning();
     await logAudit(tx, {
       actorDiscordId: member.discordId!,
-      actorName: member.robloxUsername,
+      actorName: member.robloxUsername ?? member.id,
       action: "report.create",
       targetType: "bug_report",
       targetId: r.id,

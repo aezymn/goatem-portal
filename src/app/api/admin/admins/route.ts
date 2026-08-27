@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { members } from "@/db/schema";
-import { and, asc, eq, ilike, isNull, ne } from "drizzle-orm";
+import { and, asc, eq, ilike, isNull, ne, or } from "drizzle-orm";
 import { requireCreator } from "@/lib/requireSession";
 import { addAdminSchema } from "@/lib/validation";
 import { getMemberByDiscordId } from "@/lib/members";
@@ -23,8 +23,15 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const search = url.searchParams.get("search")?.trim();
 
+  const selection = {
+    id: members.id,
+    robloxUsername: members.robloxUsername,
+    discordUsername: members.discordUsername,
+    rank: members.rank,
+  };
+
   const admins = await db
-    .select()
+    .select(selection)
     .from(members)
     .where(and(eq(members.isPortalAdmin, true), isNull(members.deletedAt)))
     .orderBy(asc(members.robloxUsername));
@@ -32,11 +39,17 @@ export async function GET(request: Request) {
   let candidates: typeof admins = [];
   if (search) {
     candidates = await db
-      .select()
+      .select(selection)
       .from(members)
       .where(
         and(
-          ilike(members.robloxUsername, `%${search}%`),
+          // Match either name: someone synced from Discord may not have
+          // linked a Roblox account yet, and would otherwise be
+          // unsearchable here.
+          or(
+            ilike(members.robloxUsername, `%${search}%`),
+            ilike(members.discordUsername, `%${search}%`)
+          ),
           eq(members.isPortalAdmin, false),
           isNull(members.deletedAt)
         )

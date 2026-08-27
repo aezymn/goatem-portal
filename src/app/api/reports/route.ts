@@ -4,7 +4,7 @@ import { bugReports, members } from "@/db/schema";
 import { desc, eq, isNull } from "drizzle-orm";
 import { requireRosterMember } from "@/lib/requireSession";
 import { createReportSchema } from "@/lib/validation";
-import { getMemberByDiscordId } from "@/lib/members";
+import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rateLimit";
 
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
 
     await logAudit(tx, {
       actorDiscordId: discordId,
-      actorName: reporterMember.robloxUsername,
+      actorName: displayNameFor(reporterMember),
       action: "report.create",
       targetType: "bug_report",
       targetId: created.id,

@@ -4,7 +4,7 @@ import { members } from "@/db/schema";
 import { asc, eq, isNull, or } from "drizzle-orm";
 import { requireRosterMember, requireAction } from "@/lib/requireSession";
 import { createMemberSchema } from "@/lib/validation";
-import { getMemberByDiscordId } from "@/lib/members";
+import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { ensureRank } from "@/lib/ranks";
 import { logAudit } from "@/lib/audit";
 
@@ -80,7 +80,6 @@ export async function POST(request: Request) {
             robloxUsername: data.robloxUsername,
             discordId: data.discordId ?? null,
             rank: data.rank,
-            status: data.status ?? null,
             notes: data.notes ?? null,
             // Deliberately NOT restoring any previous isPortalAdmin — a
             // removed admin coming back has to be re-designated by the
@@ -94,7 +93,7 @@ export async function POST(request: Request) {
 
         await logAudit(tx, {
           actorDiscordId: discordId,
-          actorName: actor?.robloxUsername ?? discordId,
+          actorName: actor ? displayNameFor(actor) : discordId,
           action: "member.restore",
           targetType: "member",
           targetId: revived.id,
@@ -114,14 +113,14 @@ export async function POST(request: Request) {
           robloxUsername: data.robloxUsername,
           discordId: data.discordId ?? null,
           rank: data.rank,
-          status: data.status ?? null,
           notes: data.notes ?? null,
+          source: "manual",
         })
         .returning();
 
       await logAudit(tx, {
         actorDiscordId: discordId,
-        actorName: actor?.robloxUsername ?? discordId,
+        actorName: actor ? displayNameFor(actor) : discordId,
         action: "member.create",
         targetType: "member",
         targetId: member.id,

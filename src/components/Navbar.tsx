@@ -96,40 +96,45 @@ function UserChip({
   const rankLabel = me?.rank ?? "Not on roster yet";
 
   return (
-    <div className="flex items-center gap-1.5">
-      {session.user.isCreator && (
-        <span className="whitespace-nowrap rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-          Creator
-        </span>
-      )}
-
-      <span
-        className="whitespace-nowrap rounded-full border border-zinc-200 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-zinc-600 dark:border-zinc-800 dark:text-zinc-300"
-        style={{ color: me?.roleColorHex ?? undefined }}
-      >
-        {rankLabel}
-      </span>
-
-      {/* The main pill: avatar, name, and the settings control all inside
-          one shape, rather than settings living as a separate button. */}
+    <div className="flex items-center">
+      {/* One oval holding everything: avatar on the left, name on the
+          right of it, and the rank (plus CREATOR) as their own small
+          pills directly beneath the name — with settings inside the same
+          shape rather than sitting outside it. */}
       <div className="relative" ref={menuRef}>
-        <div className="flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-100 py-1 pl-1 pr-1 dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="flex items-center gap-2.5 rounded-full border border-zinc-200 bg-zinc-100 py-1 pl-1 pr-1 dark:border-zinc-800 dark:bg-zinc-900">
           {me?.avatarUrl ? (
             // eslint-disable-next-line @next/next/no-img-element -- external, bot-sourced Discord CDN avatar
             <img
               src={me.avatarUrl}
               alt=""
-              className="h-8 w-8 rounded-full object-cover"
+              className="h-9 w-9 rounded-full object-cover"
             />
           ) : (
-            <div className="h-8 w-8 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+            <div className="h-9 w-9 rounded-full bg-zinc-300 dark:bg-zinc-700" />
           )}
-          <span className="pr-1 font-medium">{displayName}</span>
+
+          <div className="flex flex-col items-start gap-0.5 leading-none">
+            <span className="text-sm font-medium">{displayName}</span>
+            <span className="flex items-center gap-1">
+              {session.user.isCreator && (
+                <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                  Creator
+                </span>
+              )}
+              <span
+                className="rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                style={{ color: me?.roleColorHex ?? undefined }}
+              >
+                {rankLabel}
+              </span>
+            </span>
+          </div>
 
           <button
             onClick={() => setMenuOpen((v) => !v)}
             aria-label="Settings"
-            className="flex h-7 w-7 items-center justify-center rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full hover:bg-zinc-200 dark:hover:bg-zinc-800"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"

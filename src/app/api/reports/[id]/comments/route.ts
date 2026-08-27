@@ -4,7 +4,7 @@ import { bugReports, comments } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
 import { requireRosterMember } from "@/lib/requireSession";
 import { createCommentSchema } from "@/lib/validation";
-import { getMemberByDiscordId } from "@/lib/members";
+import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rateLimit";
 
@@ -59,7 +59,7 @@ export async function POST(
 
     await logAudit(tx, {
       actorDiscordId: discordId,
-      actorName: author.robloxUsername,
+      actorName: displayNameFor(author),
       action: "report.comment",
       targetType: "bug_report",
       targetId: id,

@@ -21,6 +21,7 @@ import {
   boolean,
   primaryKey,
   index,
+  type AnyPgColumn,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
@@ -33,9 +34,11 @@ export const reportStatusEnum = pgEnum("report_status", [
 
 // The rank ladder. `position` is the authority order an admin sets by
 // dragging ranks around on the Ranks page (lower number = higher
-// authority — position 0 is the top of the list). `discordRoleId` is an
-// optional binding to a live Discord role, purely informational/for
-// future auto-sync — it plays no part in permission resolution.
+// authority — position 0 is the top of the list). `discordRoleId` binds
+// the rank to a live Discord role: holding that role is what puts someone
+// on the roster at that rank (see src/lib/rosterSync.ts). It still plays
+// no part in permission resolution — what a rank can DO is only ever
+// rankActionPermissions below.
 //
 // A rank granting no rows in rankActionPermissions grants nothing beyond
 // the baseline every roster member gets (view roster, file/view/comment
@@ -73,21 +76,57 @@ export const rankActionPermissions = pgTable(
   ]
 );
 
+// How a roster row came to exist. Matters for sync: rows sourced from
+// Discord are owned by the sync (it can remove them when someone loses
+// the bound role), while manual and alt rows are never touched by it.
+export const memberSourceEnum = pgEnum("member_source", [
+  "discord",
+  "manual",
+  "alt",
+]);
+
 export const members = pgTable(
   "members",
   {
     id: text("id").primaryKey().$defaultFn(() => createId()),
-    robloxUsername: text("roblox_username").notNull().unique(),
+    // Nullable: people now land on the roster from Discord BEFORE they've
+    // ever signed in, so there's no Roblox username to record yet. They
+    // supply it themselves on first sign-in (see /api/me/link). Still
+    // unique — Postgres allows many NULLs under a unique constraint, so
+    // any number of unlinked people coexist, but no two can claim the
+    // same username.
+    robloxUsername: text("roblox_username").unique(),
+    // Resolved from the username via Roblox's API at link time, and kept
+    // because usernames can change while the numeric ID never does.
+    robloxUserId: text("roblox_user_id"),
     discordId: text("discord_id").unique(),
+    // Cached from the bot on each sync, purely for display — the ID above
+    // remains the identity.
+    discordUsername: text("discord_username"),
     rank: text("rank").notNull(),
-    status: text("status"),
     notes: text("notes"),
+    source: memberSourceEnum("source").notNull().default("manual"),
+    // Set on alt/testing accounts, pointing at the roster row of the
+    // person who added them.
+    parentMemberId: text("parent_member_id").references(
+      (): AnyPgColumn => members.id
+    ),
+    // Whether this person has ever actually logged into the portal —
+    // distinct from being on the roster, which now happens without them.
+    hasSignedIn: boolean("has_signed_in").notNull().default(false),
+    lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
+    // Roblox group membership => can they get into the game. Null means
+    // "not checked yet" and is deliberately distinct from false ("checked,
+    // and they can't") — the roster shows those differently.
+    hasGameAccess: boolean("has_game_access"),
+    gameAccessCheckedAt: timestamp("game_access_checked_at", {
+      withTimezone: true,
+    }),
     // Full portal-admin access, independent of rank entirely. Can ONLY be
-    // set true/false by the guild's CREATOR (Discord server owner — see
-    // src/lib/auth.ts) via the Admin Access panel, never through the
-    // regular roster edit form and never derivable from a rank. This is
-    // the one guard against "whoever hands out ranks/Discord roles can
-    // hand out full access" — see src/lib/permissions.ts.
+    // set true/false by the CREATOR (see src/lib/permissions.ts) via the
+    // Admin Access panel, never through the regular roster edit form and
+    // never derivable from a rank. This is the one guard against "whoever
+    // hands out ranks/Discord roles can hand out full access".
     isPortalAdmin: boolean("is_portal_admin").notNull().default(false),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -97,7 +136,10 @@ export const members = pgTable(
       .defaultNow(),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
-  (table) => [index("members_deleted_at_idx").on(table.deletedAt)]
+  (table) => [
+    index("members_deleted_at_idx").on(table.deletedAt),
+    index("members_parent_member_id_idx").on(table.parentMemberId),
+  ]
 );
 
 export const bugReports = pgTable(
@@ -166,10 +208,16 @@ export const auditLog = pgTable(
   ]
 );
 
-export const membersRelations = relations(members, ({ many }) => ({
+export const membersRelations = relations(members, ({ one, many }) => ({
   reportsFiled: many(bugReports, { relationName: "reportsFiled" }),
   reportsAssigned: many(bugReports, { relationName: "reportsAssigned" }),
   comments: many(comments),
+  parent: one(members, {
+    fields: [members.parentMemberId],
+    references: [members.id],
+    relationName: "altAccounts",
+  }),
+  altAccounts: many(members, { relationName: "altAccounts" }),
 }));
 
 export const bugReportsRelations = relations(bugReports, ({ one, many }) => ({
