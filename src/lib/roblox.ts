@@ -109,3 +109,51 @@ export async function lookupRobloxAccount(username: string): Promise<{
   if (!user) return null;
   return { user, hasGameAccess: await isInStudioGroup(user.id) };
 }
+
+/**
+ * Re-checks group membership for roster rows that have a linked Roblox
+ * account, refreshing hasGameAccess.
+ *
+ * Needed because a row can carry a username without ever having been
+ * checked — anyone added manually, or linked before a group was
+ * configured, sits at "unknown" forever otherwise.
+ *
+ * Runs a few lookups at a time rather than all at once: sequential would
+ * be slow enough to risk a serverless timeout on a large roster, and
+ * unbounded parallelism is a good way to get rate limited by Roblox.
+ */
+export async function refreshGameAccess(
+  rows: { id: string; robloxUsername: string | null; robloxUserId: string | null }[],
+  onResult: (id: string, userId: string, hasGameAccess: boolean | null) => Promise<void>
+): Promise<{ checked: number; failed: number }> {
+  const targets = rows.filter((r) => r.robloxUsername);
+  let checked = 0;
+  let failed = 0;
+  const CONCURRENCY = 4;
+
+  for (let i = 0; i < targets.length; i += CONCURRENCY) {
+    const batch = targets.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      batch.map(async (row) => {
+        // Prefer the stored numeric ID: usernames can change, and it
+        // saves a lookup for anyone already resolved.
+        let userId = row.robloxUserId;
+        if (!userId) {
+          const user = await resolveRobloxUser(row.robloxUsername!);
+          if (!user) {
+            failed++;
+            return;
+          }
+          userId = String(user.id);
+        }
+
+        const access = await isInStudioGroup(userId);
+        await onResult(row.id, userId, access);
+        if (access === null) failed++;
+        else checked++;
+      })
+    );
+  }
+
+  return { checked, failed };
+}

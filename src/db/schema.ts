@@ -108,9 +108,14 @@ export const members = pgTable(
     // because usernames can change while the numeric ID never does.
     robloxUserId: text("roblox_user_id"),
     discordId: text("discord_id").unique(),
-    // Cached from the bot on each sync, purely for display — the ID above
-    // remains the identity.
+    // The account's real @username, not their server nickname — cached
+    // from the bot on each sync, purely for display. The ID above remains
+    // the identity.
     discordUsername: text("discord_username"),
+    // Also cached at sync time rather than fetched per page render: a
+    // roster of 40 people would otherwise mean 40 Discord lookups every
+    // time someone opens the page.
+    discordAvatarUrl: text("discord_avatar_url"),
     rank: text("rank").notNull(),
     notes: text("notes"),
     source: memberSourceEnum("source").notNull().default("manual"),

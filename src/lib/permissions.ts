@@ -85,15 +85,27 @@ export interface AccessContext {
   actions: RankAction[];
 }
 
-/** True if `ctx` has full access — CREATOR or a designated portal ADMIN.
- * Both bypass the rank-action list entirely; an admin isn't limited to
- * whatever their own rank happens to grant. */
-export function isFullAdmin(ctx: AccessContext): boolean {
-  return ctx.isCreator || ctx.isPortalAdmin;
+/**
+ * These two accept a PARTIAL context on purpose.
+ *
+ * When a session goes stale (guild re-check failed, token revoked),
+ * next-auth's session callback returns early — leaving session.user
+ * populated with the provider defaults but WITHOUT discordId, actions or
+ * the access flags. Pages that reasonably wrote `session?.user &&
+ * hasAction(...)` then crashed on `undefined.includes`, turning an
+ * expired login into a 500. Treating a missing field as "no access" is
+ * both safer and truthful: a context that can't state its permissions
+ * doesn't have any.
+ */
+export function isFullAdmin(ctx: Partial<AccessContext>): boolean {
+  return Boolean(ctx?.isCreator || ctx?.isPortalAdmin);
 }
 
 /** True if `ctx` can perform `action` — full admins always can; everyone
  * else needs their rank to have been explicitly granted it. */
-export function hasAction(ctx: AccessContext, action: RankAction): boolean {
-  return isFullAdmin(ctx) || ctx.actions.includes(action);
+export function hasAction(
+  ctx: Partial<AccessContext>,
+  action: RankAction
+): boolean {
+  return isFullAdmin(ctx) || (ctx?.actions ?? []).includes(action);
 }

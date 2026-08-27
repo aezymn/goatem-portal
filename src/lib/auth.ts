@@ -172,6 +172,11 @@ export const authOptions: AuthOptions = {
         // Recomputed every time rather than trusted from the existing
         // token, so changing PORTAL_CREATOR_DISCORD_ID takes effect
         // within one recheck window instead of requiring a re-login.
+        // Also marked here, not only at sign-in: someone can be placed on
+        // the roster by a sync AFTER they last signed in, and their row
+        // would then claim they never had. Re-marking on each recheck
+        // means it corrects itself within one interval.
+        await markSignedIn(token.discordId);
         token.isCreator = isCreatorDiscordId(token.discordId);
         token.isPortalAdmin = await computeIsPortalAdmin(token.discordId);
         token.actions = await computeRankActions(token.discordId);

@@ -165,9 +165,12 @@ export async function listGuildRoles(): Promise<
 
 export interface GuildMemberSummary {
   discordId: string;
-  /** Server nickname if set, else the account's display name, else the
-   * raw username — i.e. what you'd actually see in the member list. */
-  displayName: string;
+  /** The account's real @username — deliberately NOT the server nickname,
+   * which changes per-server and makes people hard to identify. */
+  username: string;
+  /** Fully-formed CDN URL, preferring their server-specific picture, so
+   * callers can cache it rather than re-deriving it. */
+  avatarUrl: string;
   roleIds: string[];
 }
 
@@ -213,8 +216,8 @@ export async function listGuildMembers(): Promise<
       }
 
       const batch = (await res.json()) as {
-        user?: { id?: string; username?: string; global_name?: string | null };
-        nick?: string | null;
+        user?: { id?: string; username?: string; avatar?: string | null };
+        avatar?: string | null;
         roles?: string[];
       }[];
       if (!Array.isArray(batch) || batch.length === 0) break;
@@ -224,8 +227,11 @@ export async function listGuildMembers(): Promise<
         if (!id) continue;
         collected.push({
           discordId: id,
-          displayName:
-            m.nick ?? m.user?.global_name ?? m.user?.username ?? id,
+          username: m.user?.username ?? id,
+          avatarUrl: avatarUrlFor(id, guildId, {
+            avatar: m.avatar,
+            user: { avatar: m.user?.avatar },
+          }),
           roleIds: Array.isArray(m.roles) ? m.roles : [],
         });
       }

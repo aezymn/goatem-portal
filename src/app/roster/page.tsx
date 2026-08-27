@@ -3,34 +3,43 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { members } from "@/db/schema";
 import { asc, isNull } from "drizzle-orm";
-import { hasAction } from "@/lib/permissions";
+import { hasAction, isCreatorDiscordId } from "@/lib/permissions";
 import { isRobloxGroupConfigured } from "@/lib/roblox";
+import { listRanksWithActions } from "@/lib/ranks";
 import { AddMemberForm } from "@/components/AddMemberForm";
-import { DeleteMemberButton } from "@/components/DeleteMemberButton";
-import { DiscordNameCell } from "@/components/DiscordNameCell";
-import { YesNoUnknown } from "@/components/RosterStatusCell";
-import { SyncRosterButton } from "@/components/SyncRosterButton";
+import { RosterToolbar } from "@/components/RosterToolbar";
 import { LinkRobloxPanel } from "@/components/LinkRobloxPanel";
+import {
+  RosterGroups,
+  type RosterGroup,
+  type RosterMember,
+} from "@/components/RosterGroups";
 
 export const dynamic = "force-dynamic";
 
 export default async function RosterPage() {
   const session = await getServerSession(authOptions);
-  const canManageRoster = session?.user
-    ? hasAction(session.user, "roster.manage")
+  // A stale session carries no access fields at all — treat it as
+  // signed out rather than reading half a context.
+  const live = session && !session.stale ? session : null;
+  const canManageRoster = live?.user
+    ? hasAction(live.user, "roster.manage")
     : false;
-  const myDiscordId = session?.user?.discordId ?? null;
+  const myDiscordId = live?.user?.discordId ?? null;
 
-  const rows = await db
-    .select()
-    .from(members)
-    .where(isNull(members.deletedAt))
-    .orderBy(asc(members.rank), asc(members.robloxUsername));
+  const [rows, ranks] = await Promise.all([
+    db
+      .select()
+      .from(members)
+      .where(isNull(members.deletedAt))
+      .orderBy(asc(members.robloxUsername), asc(members.discordUsername)),
+    listRanksWithActions(),
+  ]);
 
-  // Alts sit directly under whoever owns them rather than being sorted
-  // among strangers — the roster reads as people, with their extra
-  // accounts attached.
-  const owners = rows.filter((m) => !m.parentMemberId);
+  // Rank authority order comes from the Ranks page, not the alphabet —
+  // the ladder an admin arranged is the order this should read in.
+  const rankOrder = new Map(ranks.map((r, i) => [r.name, i]));
+
   const altsByOwner = new Map<string, typeof rows>();
   for (const m of rows) {
     if (!m.parentMemberId) continue;
@@ -39,114 +48,77 @@ export default async function RosterPage() {
       m,
     ]);
   }
-  const ordered = owners.flatMap((o) => [o, ...(altsByOwner.get(o.id) ?? [])]);
+
+  function toRosterMember(m: (typeof rows)[number]): RosterMember {
+    return {
+      id: m.id,
+      robloxUsername: m.robloxUsername,
+      discordId: m.discordId,
+      discordUsername: m.discordUsername,
+      discordAvatarUrl: m.discordAvatarUrl,
+      rank: m.rank,
+      hasGameAccess: m.hasGameAccess,
+      hasSignedIn: m.hasSignedIn,
+      isPortalAdmin: m.isPortalAdmin,
+      isCreator: isCreatorDiscordId(m.discordId ?? undefined),
+      isAlt: Boolean(m.parentMemberId),
+    };
+  }
+
+  // Group by rank, each owner immediately followed by their alt accounts.
+  const byRank = new Map<string, RosterMember[]>();
+  for (const m of rows) {
+    if (m.parentMemberId) continue; // alts ride along with their owner
+    const list = byRank.get(m.rank) ?? [];
+    list.push(toRosterMember(m));
+    for (const alt of altsByOwner.get(m.id) ?? []) {
+      list.push(toRosterMember(alt));
+    }
+    byRank.set(m.rank, list);
+  }
+
+  const groups: RosterGroup[] = [...byRank.entries()]
+    .map(([rank, groupMembers]) => ({ rank, members: groupMembers }))
+    .sort(
+      (a, b) =>
+        (rankOrder.get(a.rank) ?? Number.MAX_SAFE_INTEGER) -
+          (rankOrder.get(b.rank) ?? Number.MAX_SAFE_INTEGER) ||
+        a.rank.localeCompare(b.rank)
+    );
 
   const me = myDiscordId
     ? rows.find((m) => m.discordId === myDiscordId)
     : undefined;
   const myAlts = me ? (altsByOwner.get(me.id) ?? []) : [];
 
+  const total = rows.length;
+  const linked = rows.filter((m) => m.robloxUsername).length;
+  const signedIn = rows.filter((m) => m.hasSignedIn).length;
+  const withAccess = rows.filter((m) => m.hasGameAccess === true).length;
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold tracking-tight">Roster</h1>
-        {canManageRoster && <SyncRosterButton />}
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold tracking-tight">Roster</h1>
+          <p className="mt-1 text-sm text-zinc-500">
+            {total} on the roster · {linked} linked · {signedIn} signed in
+            {isRobloxGroupConfigured() && ` · ${withAccess} in the group`}
+          </p>
+        </div>
+        {canManageRoster && (
+          <RosterToolbar groupConfigured={isRobloxGroupConfigured()} />
+        )}
       </div>
 
       {!isRobloxGroupConfigured() && (
         <p className="rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-300">
           No Roblox group is configured (<code>ROBLOX_GROUP_ID</code>), so
-          game access can&apos;t be checked — that column will stay unknown
-          until it&apos;s set.
+          game access can&apos;t be checked.
         </p>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-100 text-left dark:border-zinc-800 dark:bg-zinc-900">
-            <tr>
-              <th className="px-4 py-2 font-medium">Roblox Username</th>
-              <th className="px-4 py-2 font-medium">Discord</th>
-              <th className="px-4 py-2 font-medium">Rank</th>
-              <th className="px-4 py-2 font-medium">Game Access</th>
-              <th className="px-4 py-2 font-medium">Signed In</th>
-              {canManageRoster && <th className="px-4 py-2" />}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-200 dark:divide-zinc-800">
-            {ordered.map((m) => {
-              const isAlt = Boolean(m.parentMemberId);
-              return (
-                <tr key={m.id} className={isAlt ? "bg-zinc-50/50 dark:bg-zinc-950/50" : ""}>
-                  <td className="px-4 py-2">
-                    <span className={isAlt ? "pl-4 text-zinc-600 dark:text-zinc-400" : ""}>
-                      {m.robloxUsername ?? (
-                        <span className="text-zinc-400">not linked yet</span>
-                      )}
-                    </span>
-                    {isAlt && (
-                      <span className="ml-2 rounded-full bg-zinc-200 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
-                        alt
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-2">
-                    {isAlt ? (
-                      <span className="text-zinc-400">—</span>
-                    ) : (
-                      <DiscordNameCell
-                        discordUsername={m.discordUsername}
-                        discordId={m.discordId}
-                      />
-                    )}
-                  </td>
-                  <td className="px-4 py-2 uppercase tracking-wide text-xs text-zinc-600 dark:text-zinc-400">
-                    {m.rank}
-                  </td>
-                  <td className="px-4 py-2">
-                    <YesNoUnknown
-                      value={m.hasGameAccess}
-                      yes="Access"
-                      no="No access"
-                      unknown="Unknown"
-                    />
-                  </td>
-                  <td className="px-4 py-2">
-                    {isAlt ? (
-                      <span className="text-zinc-400">—</span>
-                    ) : (
-                      <YesNoUnknown
-                        value={m.hasSignedIn}
-                        yes="Signed in"
-                        no="Never"
-                        unknown="Never"
-                      />
-                    )}
-                  </td>
-                  {canManageRoster && (
-                    <td className="px-4 py-2 text-right">
-                      <DeleteMemberButton memberId={m.id} />
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-            {ordered.length === 0 && (
-              <tr>
-                <td
-                  colSpan={canManageRoster ? 6 : 5}
-                  className="px-4 py-6 text-center text-sm text-zinc-500"
-                >
-                  Nobody on the roster yet.{" "}
-                  {canManageRoster
-                    ? "Bind a Discord role to a rank on the Ranks page, then hit “Sync from Discord”."
-                    : "An admin needs to sync the roster from Discord."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <RosterGroups groups={groups} canManage={canManageRoster} />
 
       {me && (
         <LinkRobloxPanel

@@ -52,8 +52,9 @@ export default async function ReportDetailPage({
     .where(and(eq(comments.bugReportId, id), isNull(comments.deletedAt)))
     .orderBy(asc(comments.createdAt));
 
-  const canTriage = session?.user ? hasAction(session.user, "reports.triage") : false;
-  const canDelete = session?.user ? hasAction(session.user, "reports.delete") : false;
+  const live = session && !session.stale ? session : null;
+  const canTriage = live?.user ? hasAction(live.user, "reports.triage") : false;
+  const canDelete = live?.user ? hasAction(live.user, "reports.delete") : false;
 
   const staffOptions = canTriage
     ? await db

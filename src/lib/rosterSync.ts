@@ -71,11 +71,18 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
     rankByRoleId.set(r.discordRoleId!, { name: r.name, position: r.position });
   }
 
-  const intended = new Map<string, { rank: string; displayName: string }>();
+  const intended = new Map<
+    string,
+    { rank: string; username: string; avatarUrl: string }
+  >();
   for (const gm of guildMembers) {
     const best = bestRankFor(gm, rankByRoleId);
     if (best) {
-      intended.set(gm.discordId, { rank: best, displayName: gm.displayName });
+      intended.set(gm.discordId, {
+        rank: best,
+        username: gm.username,
+        avatarUrl: gm.avatarUrl,
+      });
     }
   }
 
@@ -110,7 +117,8 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
             .update(members)
             .set({
               rank: want.rank,
-              discordUsername: want.displayName,
+              discordUsername: want.username,
+              discordAvatarUrl: want.avatarUrl,
               deletedAt: null,
               updatedAt: new Date(),
             })
@@ -119,7 +127,8 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
         } else {
           await tx.insert(members).values({
             discordId,
-            discordUsername: want.displayName,
+            discordUsername: want.username,
+            discordAvatarUrl: want.avatarUrl,
             rank: want.rank,
             source: "discord",
           });
@@ -130,7 +139,8 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
 
       const changed =
         current.rank !== want.rank ||
-        current.discordUsername !== want.displayName ||
+        current.discordUsername !== want.username ||
+        current.discordAvatarUrl !== want.avatarUrl ||
         current.deletedAt !== null;
 
       if (changed) {
@@ -138,7 +148,8 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
           .update(members)
           .set({
             rank: want.rank,
-            discordUsername: want.displayName,
+            discordUsername: want.username,
+            discordAvatarUrl: want.avatarUrl,
             deletedAt: null, // rejoining/regaining the role restores them
             updatedAt: new Date(),
           })
