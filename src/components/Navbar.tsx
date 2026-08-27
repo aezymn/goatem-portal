@@ -42,12 +42,12 @@ export function Navbar() {
             alt=""
             className="h-14 w-auto invert dark:invert-0"
           />
-          <span className="font-coda text-xl font-normal tracking-tight">
+          <span className="font-coda text-2xl font-normal tracking-tight">
             Quality Assurance
           </span>
         </Link>
 
-        <div className="flex items-center gap-6 text-sm">
+        <div className="flex items-center gap-6 font-coda text-sm">
           {authed && (
             <>
               <Link href="/reports" className="hover:underline">
@@ -127,15 +127,15 @@ function UserChip({
           )}
 
           <div className="flex flex-col items-start gap-0.5 leading-none">
-            <span className="text-sm font-medium">{displayName}</span>
+            <span className="font-coda text-sm">{displayName}</span>
             <span className="flex items-center gap-1">
               {session.user.isCreator && (
-                <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                <span className="font-poppins rounded-full bg-emerald-100 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
                   Creator
                 </span>
               )}
               <span
-                className="rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                className="font-poppins rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
                 style={{ color: me?.roleColorHex ?? undefined }}
               >
                 {rankLabel}

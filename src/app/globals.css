@@ -7,6 +7,9 @@
    render-blocking request to a third party on every page load. */
 @import "@fontsource/coda/latin-400.css";
 @import "@fontsource/coda/latin-800.css";
+/* Poppins, for the small uppercase status badges only — hence just the
+   one weight they actually use. */
+@import "@fontsource/poppins/latin-600.css";
 
 :root {
   --background: #ffffff;
@@ -20,6 +23,7 @@
   /* Coda ships only 400 and 800 — stick to those two weights so the
      browser never has to synthesise one. The navbar uses 400. */
   --font-coda: "Coda", system-ui, sans-serif;
+  --font-poppins: "Poppins", system-ui, sans-serif;
   --font-mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
 }
 

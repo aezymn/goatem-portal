@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@fontsource/coda": "^5.3.0",
+    "@fontsource/poppins": "^5.3.0",
     "@paralleldrive/cuid2": "^3.3.0",
     "drizzle-orm": "^0.45.2",
     "next": "16.3.3",
