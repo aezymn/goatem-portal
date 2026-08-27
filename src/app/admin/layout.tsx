@@ -1,6 +1,7 @@
 import { getServerSession } from "next-auth";
 import Link from "next/link";
 import { authOptions } from "@/lib/auth";
+import { isCreatorDiscordId } from "@/lib/permissions";
 
 // Shared chrome for every /admin/* page: a sidebar of sections. This is a
 // UX convenience — src/proxy.ts already keeps non-admins out of /admin
@@ -13,7 +14,7 @@ export default async function AdminLayout({
   children: React.ReactNode;
 }) {
   const session = await getServerSession(authOptions);
-  const isCreator = session?.user?.isCreator ?? false;
+  const isCreator = isCreatorDiscordId(session?.user?.discordId);
 
   const links = [
     { href: "/admin/ranks", label: "Ranks" },

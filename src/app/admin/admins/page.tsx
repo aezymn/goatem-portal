@@ -4,16 +4,21 @@ import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { members } from "@/db/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
+import { isCreatorDiscordId } from "@/lib/permissions";
 import { AdminsPanel } from "@/components/AdminsPanel";
 
 export const dynamic = "force-dynamic";
 
 // src/proxy.ts already keeps everyone but the CREATOR off this page —
-// this is a second, defense-in-depth check. The actual security boundary
-// is requireCreator() on every route under /api/admin/admins.
+// this is a second, defense-in-depth check, and it matters more than a
+// usual page gate because this page *renders* the admin list. Checked
+// against PORTAL_CREATOR_DISCORD_ID rather than the session's own
+// isCreator flag, so the list can't be read by a session that merely
+// claims to be the CREATOR. Mutations underneath are separately gated by
+// requireCreator().
 export default async function AdminsPage() {
   const session = await getServerSession(authOptions);
-  if (!session?.user?.isCreator) {
+  if (!isCreatorDiscordId(session?.user?.discordId)) {
     redirect("/access-denied");
   }
 

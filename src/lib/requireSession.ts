@@ -2,7 +2,13 @@ import { getServerSession, type Session } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { getMemberByDiscordId } from "@/lib/members";
-import { hasAction, isFullAdmin, type RankAction } from "@/lib/permissions";
+import {
+  hasAction,
+  isCreatorDiscordId,
+  isFullAdmin,
+  type AccessContext,
+  type RankAction,
+} from "@/lib/permissions";
 
 type AuthResult =
   | { ok: true; session: Session }
@@ -22,6 +28,28 @@ function baseSession(session: Session | null): session is Session {
 }
 
 /**
+ * The authoritative access context for a request.
+ *
+ * CREATOR is deliberately RE-DERIVED here from PORTAL_CREATOR_DISCORD_ID
+ * rather than read off the session, so it is never something a session
+ * token can merely *claim*. The token's own isCreator flag is a
+ * convenience for rendering (badges, nav links) — this is what actually
+ * decides anything. Practically: even a forged or stale token can't
+ * assert CREATOR, because the only thing that grants it is a Discord ID
+ * matching an environment variable that lives outside the app.
+ *
+ * isPortalAdmin still comes from the session, refreshed against the
+ * database on the 15-minute recheck in src/lib/auth.ts.
+ */
+function accessContext(session: Session): AccessContext {
+  return {
+    isCreator: isCreatorDiscordId(session.user.discordId),
+    isPortalAdmin: session.user.isPortalAdmin,
+    actions: session.user.actions ?? [],
+  };
+}
+
+/**
  * The baseline every logged-in-and-on-the-roster route needs: viewing the
  * roster, filing/viewing/commenting on bug reports. Doesn't require any
  * rank action — that's the whole point of "baseline." A signed-in Discord
@@ -33,7 +61,7 @@ export async function requireRosterMember(): Promise<AuthResult> {
   if (!baseSession(session)) return UNAUTHORIZED;
 
   const member = await getMemberByDiscordId(session.user.discordId);
-  if (!member && !isFullAdmin(session.user)) return FORBIDDEN;
+  if (!member && !isFullAdmin(accessContext(session))) return FORBIDDEN;
 
   return { ok: true, session };
 }
@@ -50,7 +78,7 @@ export async function requireRosterMember(): Promise<AuthResult> {
 export async function requireAction(action: RankAction): Promise<AuthResult> {
   const session = await getServerSession(authOptions);
   if (!baseSession(session)) return UNAUTHORIZED;
-  if (!hasAction(session.user, action)) return FORBIDDEN;
+  if (!hasAction(accessContext(session), action)) return FORBIDDEN;
   return { ok: true, session };
 }
 
@@ -60,7 +88,7 @@ export async function requireAction(action: RankAction): Promise<AuthResult> {
 export async function requireAdmin(): Promise<AuthResult> {
   const session = await getServerSession(authOptions);
   if (!baseSession(session)) return UNAUTHORIZED;
-  if (!isFullAdmin(session.user)) return FORBIDDEN;
+  if (!isFullAdmin(accessContext(session))) return FORBIDDEN;
   return { ok: true, session };
 }
 
@@ -70,6 +98,6 @@ export async function requireAdmin(): Promise<AuthResult> {
 export async function requireCreator(): Promise<AuthResult> {
   const session = await getServerSession(authOptions);
   if (!baseSession(session)) return UNAUTHORIZED;
-  if (!session.user.isCreator) return FORBIDDEN;
+  if (!accessContext(session).isCreator) return FORBIDDEN;
   return { ok: true, session };
 }
