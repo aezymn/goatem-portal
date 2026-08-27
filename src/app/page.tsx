@@ -14,7 +14,7 @@ export default async function Home() {
     return (
       <div className="flex flex-col items-start gap-4">
         <h1 className="text-2xl font-semibold tracking-tight">
-          Goatem Studios Portal
+          Quality Assurance
         </h1>
         <p className="max-w-lg text-zinc-600 dark:text-zinc-400">
           Sign in with the Discord account you use in the Goatem Studios

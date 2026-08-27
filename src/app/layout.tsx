@@ -9,7 +9,7 @@ import { Navbar } from "@/components/Navbar";
 // does.
 
 export const metadata: Metadata = {
-  title: "Goatem Studios Portal",
+  title: "Quality Assurance — Goatem Studios",
   description: "Staff roster and bug tracking for Goatem Studios",
 };
 

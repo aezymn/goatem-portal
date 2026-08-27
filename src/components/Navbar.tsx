@@ -31,8 +31,18 @@ export function Navbar() {
   return (
     <header className="border-b border-zinc-200 dark:border-zinc-800">
       <nav className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
-        <Link href="/" className="font-semibold tracking-tight">
-          Goatem Studios Portal
+        <Link href="/" className="flex items-center gap-2.5 font-semibold tracking-tight">
+          {/* The artwork is white, which is right on the dark navbar but
+              would vanish against the light one. Inverting a white
+              transparent PNG yields black and preserves transparency, so
+              one file covers both themes. */}
+          {/* eslint-disable-next-line @next/next/no-img-element -- static local asset, no optimisation needed at 28px */}
+          <img
+            src="/goatem-logo.png"
+            alt=""
+            className="h-7 w-auto invert dark:invert-0"
+          />
+          Quality Assurance
         </Link>
 
         <div className="flex items-center gap-6 text-sm">
