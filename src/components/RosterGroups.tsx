@@ -7,6 +7,9 @@ import { YesNoUnknown } from "@/components/RosterStatusCell";
 import { PresenceCell, useNow } from "@/components/PresenceCell";
 import { DeleteMemberButton } from "@/components/DeleteMemberButton";
 import type { Region } from "@/lib/regions";
+import { ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Badge } from "@/components/ui/badge";
 
 export interface RosterMember {
   id: string;
@@ -84,27 +87,19 @@ export function RosterGroups({
         return (
           <section
             key={group.rank}
-            className="overflow-hidden rounded-xl border border-zinc-200/60 bg-white/60 shadow-sm backdrop-blur-sm transition-all duration-300 hover:shadow-lg hover:shadow-zinc-200/40 dark:border-zinc-800/60 dark:bg-zinc-950/40 dark:hover:shadow-black/60 dark:hover:border-zinc-700/80"
+            className="overflow-hidden border border-zinc-200 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-950 sm:rounded-lg"
           >
             <button
               onClick={() => toggle(group.rank)}
               aria-expanded={!isCollapsed}
-              className="flex w-full items-center gap-2.5 border-b border-zinc-100 bg-zinc-50/80 px-4 py-2.5 text-left transition hover:bg-zinc-100 dark:border-zinc-900 dark:bg-zinc-900/50 dark:hover:bg-zinc-900"
+              className="flex w-full items-center gap-2.5 bg-zinc-50/80 px-4 py-3 text-left transition hover:bg-zinc-100 dark:bg-zinc-900/50 dark:hover:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800"
             >
-              <svg
-                aria-hidden
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2.5}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`h-3 w-3 shrink-0 text-zinc-400 transition-transform ${
-                  isCollapsed ? "" : "rotate-90"
-                }`}
-              >
-                <path d="M9 6l6 6-6 6" />
-              </svg>
+              <ChevronRight
+                className={cn(
+                  "h-4 w-4 shrink-0 text-zinc-400 transition-transform duration-200",
+                  !isCollapsed && "rotate-90"
+                )}
+              />
 
               <span className="text-sm uppercase tracking-wider">
                 {group.rank}
@@ -117,11 +112,11 @@ export function RosterGroups({
             </button>
 
             {!isCollapsed && (
-              <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
+              <ul className="divide-y divide-zinc-200 dark:divide-zinc-800">
                 {group.members.map((m) => (
                   <li
                     key={m.id}
-                    className="group/row flex items-center gap-3 px-4 py-2 transition hover:bg-zinc-50 dark:hover:bg-zinc-900/40"
+                    className="group/row flex items-center gap-3 px-4 py-3 transition hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
                   >
                     {/* Alts carry no Discord identity, so they have no
                         avatar to show and never will — the guide line
@@ -156,23 +151,23 @@ export function RosterGroups({
                         </Link>
                         {/* Order is priority order: who they are, then
                             what they are, then where they are. */}
-                        {m.isCreator && <Badge tone="emerald">Creator</Badge>}
+                        {m.isCreator && <Badge variant="default">Creator</Badge>}
                         {m.isPortalAdmin && !m.isCreator && (
-                          <Badge tone="indigo">Admin</Badge>
+                          <Badge variant="secondary">Admin</Badge>
                         )}
-                        {m.isAlt && <Badge tone="zinc">Alt</Badge>}
+                        {m.isAlt && <Badge variant="outline">Alt</Badge>}
                         {m.awayUntil && (
-                          <Badge
-                            tone="amber"
+                          <span
                             title={`On a notice of absence — back ${formatDay(
                               m.awayUntil
                             )}`}
-                          >
-                            NOA
-                          </Badge>
+                            className="flex h-2 w-2 rounded-full bg-orange-500"
+                          />
                         )}
                         {m.region && (
-                          <Badge tone="outline">{m.region}</Badge>
+                          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                            {m.region}
+                          </span>
                         )}
                       </span>
                       {!m.isAlt && m.discordId && (
@@ -245,38 +240,7 @@ function Avatar({ url }: { url: string | null }) {
   );
 }
 
-function Badge({
-  tone,
-  title,
-  children,
-}: {
-  tone: "emerald" | "indigo" | "zinc" | "amber" | "outline";
-  title?: string;
-  children: React.ReactNode;
-}) {
-  const tones = {
-    emerald:
-      "bg-emerald-100/80 text-emerald-800 ring-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/20",
-    indigo:
-      "bg-indigo-100/80 text-indigo-800 ring-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-400/20",
-    zinc: "bg-zinc-100/80 text-zinc-700 ring-zinc-500/20 dark:bg-zinc-500/10 dark:text-zinc-300 dark:ring-zinc-400/20",
-    amber:
-      "bg-amber-100/80 text-amber-800 ring-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-400/20",
-    // Region is an attribute rather than a status, so it's outlined
-    // rather than filled — present without competing with the badges
-    // that mean something is true of the person right now.
-    outline:
-      "text-zinc-500 ring-zinc-300/50 dark:text-zinc-400 dark:ring-zinc-700/50",
-  };
-  return (
-    <span
-      title={title}
-      className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide ring-1 ring-inset shadow-sm backdrop-blur-sm transition-transform hover:scale-105 ${tones[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
+
 
 /** "12 Sep" — short enough for a tooltip, unambiguous enough to plan
  * around. */

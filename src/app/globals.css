@@ -1,6 +1,5 @@
 @import "tailwindcss";
-
-@import "tailwindcss";
+@plugin "tailwindcss-animate";
 
 @theme inline {
   --color-background: var(--background);

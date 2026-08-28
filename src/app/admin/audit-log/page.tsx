@@ -35,11 +35,22 @@ export default async function AuditLogPage({
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-2xl font-semibold tracking-tight">Audit Log</h1>
-      <p className="text-sm text-zinc-600 dark:text-zinc-400">
-        Read-only, most recent 200 entries. Nothing here can be edited or
-        cleared from the app.
-      </p>
+      <div>
+        <nav className="mb-2 flex text-sm font-medium text-zinc-500 dark:text-zinc-400">
+          <ol className="flex items-center space-x-2">
+            <li>Admin</li>
+            <li>
+              <svg fill="currentColor" viewBox="0 0 20 20" className="h-4 w-4 text-zinc-400" aria-hidden="true"><path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd"></path></svg>
+            </li>
+            <li className="text-zinc-900 dark:text-zinc-100">Audit Log</li>
+          </ol>
+        </nav>
+        <h1 className="text-2xl font-semibold tracking-tight">Audit Log</h1>
+        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+          Read-only, most recent 200 entries. Nothing here can be edited or
+          cleared from the app.
+        </p>
+      </div>
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-sm">
