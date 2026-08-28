@@ -3,14 +3,15 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AttachmentFields } from "@/components/AttachmentFields";
-import { TagChip, type TagSummary } from "@/components/TagChip";
+import { TagChip } from "@/components/TagChip";
+import type { PickerTag } from "@/components/ReportSettings";
 
 export function NewReportForm({
   categories,
   tags,
 }: {
   categories: { id: string; name: string }[];
-  tags: TagSummary[];
+  tags: PickerTag[];
 }) {
   const router = useRouter();
   const [title, setTitle] = useState("");
@@ -20,6 +21,29 @@ export function NewReportForm({
   const [attachments, setAttachments] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Grouped for display, with ungrouped tags collected under "Other".
+  const grouped = new Map<string, PickerTag[]>();
+  for (const tag of tags) {
+    const key = tag.groupName ?? "Other";
+    grouped.set(key, [...(grouped.get(key) ?? []), tag]);
+  }
+  const tagGroups = [...grouped.entries()];
+
+  function toggleTag(tag: PickerTag) {
+    setTagIds((prev) => {
+      if (prev.includes(tag.id)) return prev.filter((t) => t !== tag.id);
+      if (tag.groupExclusive && tag.groupId) {
+        // An exclusive type holds one tag at a time — picking a second
+        // replaces the first rather than adding to it.
+        const siblings = new Set(
+          tags.filter((t) => t.groupId === tag.groupId).map((t) => t.id)
+        );
+        return [...prev.filter((t) => !siblings.has(t)), tag.id];
+      }
+      return [...prev, tag.id];
+    });
+  }
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -99,24 +123,21 @@ export function NewReportForm({
           </select>
         </label>
 
-        {tags.length > 0 && (
-          <div className="flex flex-col gap-1.5 text-sm">
-            Tags
+        {tagGroups.map(([groupName, groupTags]) => (
+          <div key={groupName} className="flex flex-col gap-1.5 text-sm">
+            {groupName}
+            {groupTags[0]?.groupExclusive && (
+              <span className="-mt-1 text-xs text-zinc-500">Pick one.</span>
+            )}
             <div className="flex flex-wrap gap-1.5">
-              {tags.map((tag) => {
+              {groupTags.map((tag) => {
                 const on = tagIds.includes(tag.id);
                 return (
                   <button
                     key={tag.id}
                     type="button"
                     aria-pressed={on}
-                    onClick={() =>
-                      setTagIds((prev) =>
-                        prev.includes(tag.id)
-                          ? prev.filter((t) => t !== tag.id)
-                          : [...prev, tag.id]
-                      )
-                    }
+                    onClick={() => toggleTag(tag)}
                     className={`rounded-full transition ${
                       on ? "" : "opacity-40 hover:opacity-80"
                     }`}
@@ -127,7 +148,7 @@ export function NewReportForm({
               })}
             </div>
           </div>
-        )}
+        ))}
 
         <div className="flex flex-col gap-1.5 text-sm">
           Attachments

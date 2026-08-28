@@ -21,10 +21,16 @@ export function AttachmentView({ urls }: { urls: string[] }) {
           return (
             <div
               key={a.url}
-              className="relative w-full overflow-hidden rounded-lg border border-zinc-200 bg-black dark:border-zinc-800"
+              className="relative w-full min-w-[16rem] overflow-hidden rounded-lg border border-zinc-200 bg-black dark:border-zinc-800"
               // 16:9, held by padding rather than an aspect-ratio class so
               // the iframe can be absolutely positioned inside it — the
               // players don't resize themselves.
+              //
+              // min-w matters: percentage padding resolves against the
+              // container's WIDTH, so inside any shrink-to-fit parent this
+              // box would have width 0 and therefore height 0. The caller
+              // gives it a real width too; this is the floor that stops a
+              // player ever collapsing to a sliver again.
               style={{ paddingBottom: "56.25%" }}
             >
               <iframe

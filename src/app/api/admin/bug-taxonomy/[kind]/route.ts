@@ -7,10 +7,16 @@ import {
   asTagTone,
   createCategory,
   createTag,
+  createTagGroup,
   listCategories,
+  listTagGroups,
   listTags,
 } from "@/lib/bugTaxonomy";
-import { createCategorySchema, createTagSchema } from "@/lib/validation";
+import {
+  createCategorySchema,
+  createTagGroupSchema,
+  createTagSchema,
+} from "@/lib/validation";
 
 /**
  * Categories and tags share one route because they're the same shape of
@@ -18,11 +24,19 @@ import { createCategorySchema, createTagSchema } from "@/lib/validation";
  * The [kind] segment picks which, rather than duplicating the whole file.
  */
 
-type Kind = "categories" | "tags";
+type Kind = "categories" | "tags" | "groups";
 
 function kindOf(raw: string): Kind | null {
-  return raw === "categories" || raw === "tags" ? raw : null;
+  return raw === "categories" || raw === "tags" || raw === "groups"
+    ? raw
+    : null;
 }
+
+const LABEL: Record<Kind, string> = {
+  categories: "category",
+  tags: "tag",
+  groups: "tag type",
+};
 
 export async function GET(
   _request: Request,
@@ -33,11 +47,11 @@ export async function GET(
   const kind = kindOf((await ctx.params).kind);
   if (!kind) return NextResponse.json({ error: "not found" }, { status: 404 });
 
-  return NextResponse.json(
-    kind === "categories"
-      ? { categories: await listCategories() }
-      : { tags: await listTags() }
-  );
+  if (kind === "categories")
+    return NextResponse.json({ categories: await listCategories() });
+  if (kind === "groups")
+    return NextResponse.json({ groups: await listTagGroups() });
+  return NextResponse.json({ tags: await listTags() });
 }
 
 export async function POST(
@@ -56,7 +70,9 @@ export async function POST(
   const parsed =
     kind === "categories"
       ? createCategorySchema.safeParse(body)
-      : createTagSchema.safeParse(body);
+      : kind === "groups"
+        ? createTagGroupSchema.safeParse(body)
+        : createTagSchema.safeParse(body);
 
   if (!parsed.success) {
     return NextResponse.json(
@@ -66,25 +82,31 @@ export async function POST(
   }
 
   try {
+    const data = parsed.data as {
+      name: string;
+      tone?: string;
+      groupId?: string | null;
+      exclusive?: boolean;
+    };
+
     const created =
       kind === "categories"
-        ? await createCategory(parsed.data.name)
-        : await createTag(
-            parsed.data.name,
-            asTagTone(
-              "tone" in parsed.data
-                ? (parsed.data.tone as string | undefined)
-                : undefined
-            )
-          );
+        ? await createCategory(data.name)
+        : kind === "groups"
+          ? await createTagGroup(data.name, data.exclusive === true)
+          : await createTag(
+              data.name,
+              asTagTone(data.tone),
+              data.groupId ?? null
+            );
 
     await logAudit(db, {
       actorDiscordId: discordId,
       actorName: actor ? displayNameFor(actor) : discordId,
-      action: kind === "categories" ? "category.create" : "tag.create",
-      targetType: kind === "categories" ? "bug_category" : "bug_tag",
+      action: `${LABEL[kind].replace(" ", "_")}.create`,
+      targetType: kind,
       targetId: created?.id,
-      metadata: { name: parsed.data.name },
+      metadata: { name: data.name },
     });
 
     return NextResponse.json({ created }, { status: 201 });
@@ -93,7 +115,9 @@ export async function POST(
     // rather than a 500 — this is the only way this insert fails.
     if (String(err).includes("unique")) {
       return NextResponse.json(
-        { error: `A ${kind === "categories" ? "category" : "tag"} called “${parsed.data.name}” already exists.` },
+        {
+          error: `A ${LABEL[kind]} called “${parsed.data.name}” already exists.`,
+        },
         { status: 409 }
       );
     }

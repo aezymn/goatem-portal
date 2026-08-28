@@ -1,8 +1,12 @@
 import Link from "next/link";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { bugCategories, bugReports, members } from "@/db/schema";
 import { asc, desc, eq, isNull, sql } from "drizzle-orm";
 import { tagsForReports } from "@/lib/bugTaxonomy";
+import { getMemberByDiscordId } from "@/lib/members";
+import { joinedReportIds } from "@/lib/reports";
 import { TagChip } from "@/components/TagChip";
 
 // This page reads straight from the database (not via fetch()), which
@@ -13,6 +17,13 @@ import { TagChip } from "@/components/TagChip";
 export const dynamic = "force-dynamic";
 
 export default async function ReportsPage() {
+  const session = await getServerSession(authOptions);
+  const live = session && !session.stale ? session : null;
+  const me = live?.user?.discordId
+    ? await getMemberByDiscordId(live.user.discordId)
+    : undefined;
+  const mine = me ? await joinedReportIds(me.id) : new Set<string>();
+
   // Page-level access is already gated by src/proxy.ts before this ever
   // renders; this query itself has no extra auth check because reading
   // the report list needs no elevated tier (any signed-in roster member
@@ -95,13 +106,25 @@ export default async function ReportsPage() {
                 <li key={report.id}>
                   <Link
                     href={`/reports/${report.id}`}
-                    className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 transition hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                    // Reports you're on carry an accent down the left edge
+                    // and a tinted background — enough to pick yours out
+                    // of a long list at a glance, without shouting.
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 border-l-2 py-3 pr-4 transition ${
+                      mine.has(report.id)
+                        ? "border-indigo-500 bg-indigo-50/50 pl-3.5 hover:bg-indigo-50 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/40"
+                        : "border-transparent pl-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                    }`}
                   >
                     <span className="min-w-0 flex-1">
                       <span className="block truncate font-medium">
                         {report.title}
                       </span>
                       <span className="text-xs text-zinc-500">
+                        {mine.has(report.id) && (
+                          <span className="font-medium text-indigo-600 dark:text-indigo-400">
+                            You&apos;re on this ·{" "}
+                          </span>
+                        )}
                         {report.reporterUsername ?? "someone"} ·{" "}
                         {report.createdAt.toLocaleDateString()}
                         {report.replyCount > 0 &&

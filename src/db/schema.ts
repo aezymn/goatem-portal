@@ -185,6 +185,23 @@ export const bugCategories = pgTable("bug_categories", {
     .defaultNow(),
 });
 
+// A kind of tag — "Progress", "Priority". Grouping exists mainly so a
+// group can be marked `exclusive`: a report is In progress OR Complete,
+// never both, and that rule belongs to the group rather than being
+// hardcoded against particular tag names.
+export const bugTagGroups = pgTable("bug_tag_groups", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  name: text("name").notNull().unique(),
+  exclusive: boolean("exclusive").notNull().default(false),
+  position: integer("position").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 // Free-form labels: workflow state ("In progress", "Complete") and
 // priority ("High priority") are the same kind of thing, so they share
 // one system rather than a status column competing with a tag list.
@@ -195,6 +212,12 @@ export const bugTags = pgTable("bug_tags", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
   name: text("name").notNull().unique(),
   tone: text("tone").notNull().default("zinc"),
+  // ON DELETE SET NULL: removing a group should ungroup its tags, never
+  // delete labels that reports are still using.
+  groupId: text("group_id").references(
+    (): AnyPgColumn => bugTagGroups.id,
+    { onDelete: "set null" }
+  ),
   position: integer("position").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
@@ -251,6 +274,13 @@ export const comments = pgTable(
       .notNull()
       .references(() => members.id),
     attachments: jsonb("attachments").$type<string[]>().notNull().default([]),
+    // Which stage was current when this was written. Null means it was
+    // said before any stage existed, so it sits under the report itself.
+    // ON DELETE SET NULL: removing a stage must not delete what people
+    // said during it.
+    stageId: text("stage_id").references((): AnyPgColumn => bugStages.id, {
+      onDelete: "set null",
+    }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -261,6 +291,34 @@ export const comments = pgTable(
 
 // Append-only. No code path in this app updates or deletes rows here —
 // that's the whole point. See src/lib/audit.ts.
+// The steps a bug moves through, in order — "Reproduced on staging",
+// "Fix in review". Comments hang off whichever stage was current when
+// they were written, so the thread reads as a record of what happened at
+// each step rather than one long undifferentiated list.
+//
+// Stages belong to one report (they aren't a shared workflow) because
+// what a bug goes through is particular to that bug.
+export const bugStages = pgTable(
+  "bug_stages",
+  {
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    bugReportId: text("bug_report_id")
+      .notNull()
+      .references(() => bugReports.id, { onDelete: "cascade" }),
+    title: text("title").notNull(),
+    note: text("note"),
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => members.id),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [index("bug_stages_bug_report_id_idx").on(table.bugReportId)]
+);
+
 // Many-to-many, hard-deleted on purpose: unapplying a tag is not the
 // kind of event the soft-delete rule exists to protect, and keeping
 // tombstones here would make "which tags does this report have" a
@@ -402,14 +460,35 @@ export const bugReportsRelations = relations(bugReports, ({ one, many }) => ({
   comments: many(comments),
   tags: many(bugReportTags),
   participants: many(bugParticipants),
+  stages: many(bugStages),
 }));
 
 export const bugCategoriesRelations = relations(bugCategories, ({ many }) => ({
   reports: many(bugReports),
 }));
 
-export const bugTagsRelations = relations(bugTags, ({ many }) => ({
+export const bugTagsRelations = relations(bugTags, ({ one, many }) => ({
   reports: many(bugReportTags),
+  group: one(bugTagGroups, {
+    fields: [bugTags.groupId],
+    references: [bugTagGroups.id],
+  }),
+}));
+
+export const bugTagGroupsRelations = relations(bugTagGroups, ({ many }) => ({
+  tags: many(bugTags),
+}));
+
+export const bugStagesRelations = relations(bugStages, ({ one, many }) => ({
+  report: one(bugReports, {
+    fields: [bugStages.bugReportId],
+    references: [bugReports.id],
+  }),
+  createdBy: one(members, {
+    fields: [bugStages.createdById],
+    references: [members.id],
+  }),
+  comments: many(comments),
 }));
 
 export const bugReportTagsRelations = relations(bugReportTags, ({ one }) => ({
@@ -455,6 +534,8 @@ export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
 export type BugCategory = typeof bugCategories.$inferSelect;
 export type BugTag = typeof bugTags.$inferSelect;
+export type BugTagGroup = typeof bugTagGroups.$inferSelect;
+export type BugStage = typeof bugStages.$inferSelect;
 export const absencesRelations = relations(absences, ({ one }) => ({
   member: one(members, {
     fields: [absences.memberId],

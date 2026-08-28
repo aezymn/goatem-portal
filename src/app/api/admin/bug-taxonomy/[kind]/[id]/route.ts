@@ -7,15 +7,23 @@ import {
   asTagTone,
   deleteCategory,
   deleteTag,
+  deleteTagGroup,
   renameCategory,
   updateTag,
+  updateTagGroup,
 } from "@/lib/bugTaxonomy";
-import { updateCategorySchema, updateTagSchema } from "@/lib/validation";
+import {
+  updateCategorySchema,
+  updateTagGroupSchema,
+  updateTagSchema,
+} from "@/lib/validation";
 
-type Kind = "categories" | "tags";
+type Kind = "categories" | "tags" | "groups";
 
 function kindOf(raw: string): Kind | null {
-  return raw === "categories" || raw === "tags" ? raw : null;
+  return raw === "categories" || raw === "tags" || raw === "groups"
+    ? raw
+    : null;
 }
 
 export async function PATCH(
@@ -35,7 +43,9 @@ export async function PATCH(
   const parsed =
     kind === "categories"
       ? updateCategorySchema.safeParse(body)
-      : updateTagSchema.safeParse(body);
+      : kind === "groups"
+        ? updateTagGroupSchema.safeParse(body)
+        : updateTagSchema.safeParse(body);
   if (!parsed.success) {
     return NextResponse.json(
       { error: parsed.error.issues[0]?.message ?? "Invalid input" },
@@ -44,14 +54,30 @@ export async function PATCH(
   }
 
   try {
+    const changes = parsed.data as {
+      name?: string;
+      tone?: string;
+      groupId?: string | null;
+      exclusive?: boolean;
+    };
+
     if (kind === "categories") {
-      await renameCategory(id, parsed.data.name!);
+      await renameCategory(id, changes.name!);
+    } else if (kind === "groups") {
+      await updateTagGroup(id, {
+        ...(changes.name !== undefined ? { name: changes.name } : {}),
+        ...(changes.exclusive !== undefined
+          ? { exclusive: changes.exclusive }
+          : {}),
+      });
     } else {
-      const changes = parsed.data as { name?: string; tone?: string };
       await updateTag(id, {
         ...(changes.name !== undefined ? { name: changes.name } : {}),
         ...(changes.tone !== undefined
           ? { tone: asTagTone(changes.tone) }
+          : {}),
+        ...(changes.groupId !== undefined
+          ? { groupId: changes.groupId || null }
           : {}),
       });
     }
@@ -68,8 +94,8 @@ export async function PATCH(
   await logAudit(db, {
     actorDiscordId: discordId,
     actorName: actor ? displayNameFor(actor) : discordId,
-    action: kind === "categories" ? "category.update" : "tag.update",
-    targetType: kind === "categories" ? "bug_category" : "bug_tag",
+    action: `${kind}.update`,
+    targetType: kind,
     targetId: id,
     metadata: parsed.data,
   });
@@ -94,13 +120,14 @@ export async function DELETE(
   const actor = await getMemberByDiscordId(discordId);
 
   if (kind === "categories") await deleteCategory(id);
+  else if (kind === "groups") await deleteTagGroup(id);
   else await deleteTag(id);
 
   await logAudit(db, {
     actorDiscordId: discordId,
     actorName: actor ? displayNameFor(actor) : discordId,
-    action: kind === "categories" ? "category.delete" : "tag.delete",
-    targetType: kind === "categories" ? "bug_category" : "bug_tag",
+    action: `${kind}.delete`,
+    targetType: kind,
     targetId: id,
   });
 

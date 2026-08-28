@@ -1,10 +1,18 @@
-import { listCategories, listTags } from "@/lib/bugTaxonomy";
+import {
+  listCategories,
+  listTagGroups,
+  listTags,
+} from "@/lib/bugTaxonomy";
 import { BugTaxonomyBoard } from "@/components/BugTaxonomyBoard";
 
 export const dynamic = "force-dynamic";
 
 export default async function BugSetupPage() {
-  const [categories, tags] = await Promise.all([listCategories(), listTags()]);
+  const [categories, groups, tags] = await Promise.all([
+    listCategories(),
+    listTagGroups(),
+    listTags(),
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -18,7 +26,8 @@ export default async function BugSetupPage() {
       </div>
 
       <BugTaxonomyBoard kind="categories" entries={categories} />
-      <BugTaxonomyBoard kind="tags" entries={tags} />
+      <BugTaxonomyBoard kind="groups" entries={groups} />
+      <BugTaxonomyBoard kind="tags" entries={tags} groups={groups} />
     </div>
   );
 }

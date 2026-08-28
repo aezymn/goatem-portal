@@ -4,17 +4,21 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { bugCategories, bugReports, members } from "@/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
-import { hasAction } from "@/lib/permissions";
-import { getMemberByDiscordId } from "@/lib/members";
+import { and, asc, eq, isNull } from "drizzle-orm";
+import { hasAction, isFullAdmin } from "@/lib/permissions";
+import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { listCategories, listTags, tagsForReports } from "@/lib/bugTaxonomy";
-import { getReportParticipants, getReportTimeline } from "@/lib/reports";
+import {
+  getReportParticipants,
+  getReportTimeline,
+  listStages,
+} from "@/lib/reports";
 import { currentAbsencesByMemberId } from "@/lib/activity";
 import { listRanksWithActions } from "@/lib/ranks";
 import { nowMs } from "@/lib/presence";
 import { TagChip } from "@/components/TagChip";
-import { ReportTriage } from "@/components/ReportTriage";
-import { ReportTimeline } from "@/components/ReportTimeline";
+import { ReportSettings } from "@/components/ReportSettings";
+import { ReportThread } from "@/components/ReportThread";
 import { ParticipantsPanel } from "@/components/ParticipantsPanel";
 import { ReportActions } from "@/components/ReportActions";
 
@@ -31,11 +35,15 @@ export default async function ReportDetailPage({
     .select({
       id: bugReports.id,
       title: bugReports.title,
+      description: bugReports.description,
+      attachments: bugReports.attachments,
       createdAt: bugReports.createdAt,
       reporterId: bugReports.reporterId,
       categoryId: bugReports.categoryId,
       categoryName: bugCategories.name,
-      reporterUsername: members.robloxUsername,
+      reporterRoblox: members.robloxUsername,
+      reporterDiscord: members.discordUsername,
+      reporterAvatarUrl: members.discordAvatarUrl,
     })
     .from(bugReports)
     .innerJoin(members, eq(bugReports.reporterId, members.id))
@@ -49,20 +57,51 @@ export default async function ReportDetailPage({
     ? await getMemberByDiscordId(live.user.discordId)
     : undefined;
 
-  const [timeline, participants, tagsByReport, allTags, allCategories, ranks, away] =
-    await Promise.all([
-      getReportTimeline(id),
-      getReportParticipants(id, report.reporterId),
-      tagsForReports([id]),
-      listTags(),
-      listCategories(),
-      listRanksWithActions(),
-      currentAbsencesByMemberId(),
-    ]);
+  const [
+    timeline,
+    stages,
+    participants,
+    tagsByReport,
+    allTags,
+    allCategories,
+    ranks,
+    away,
+    roster,
+  ] = await Promise.all([
+    getReportTimeline(id),
+    listStages(id),
+    getReportParticipants(id, report.reporterId),
+    tagsForReports([id]),
+    listTags(),
+    listCategories(),
+    listRanksWithActions(),
+    currentAbsencesByMemberId(),
+    db
+      .select({
+        id: members.id,
+        robloxUsername: members.robloxUsername,
+        discordUsername: members.discordUsername,
+        discordId: members.discordId,
+      })
+      .from(members)
+      .where(and(isNull(members.deletedAt), isNull(members.parentMemberId)))
+      .orderBy(asc(members.robloxUsername)),
+  ]);
 
   const tags = tagsByReport.get(id) ?? [];
   const canTriage = live?.user ? hasAction(live.user, "reports.triage") : false;
   const canDelete = live?.user ? hasAction(live.user, "reports.delete") : false;
+  const isAdmin = live?.user ? isFullAdmin(live.user) : false;
+
+  // A stage is a claim about where the work has got to, so it comes from
+  // someone doing the work: whoever joined, whoever filed it, or an admin.
+  const onIt = participants.some((p) => p.memberId === me?.id);
+  const canAddStage = Boolean(
+    me && (isAdmin || onIt || report.reporterId === me.id)
+  );
+
+  const reporterName =
+    report.reporterRoblox ?? report.reporterDiscord ?? "someone";
 
   return (
     <div className="flex flex-col gap-5">
@@ -80,43 +119,56 @@ export default async function ReportDetailPage({
               {report.title}
             </h1>
             <p className="mt-1 text-sm text-zinc-500">
-              filed by {report.reporterUsername ?? "someone"} ·{" "}
+              filed by {reporterName} ·{" "}
               {report.createdAt.toLocaleDateString()}
               {report.categoryName && ` · ${report.categoryName}`}
             </p>
+            {tags.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {tags.map((t) => (
+                  <TagChip key={t.id} tag={t} />
+                ))}
+              </div>
+            )}
           </div>
-          {canDelete && <ReportActions reportId={report.id} />}
-        </div>
 
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map((t) => (
-              <TagChip key={t.id} tag={t} />
-            ))}
+          {/* Delete on top, Settings tucked underneath it — the pair of
+              things you do TO a report, out of the way of the report. */}
+          <div className="flex shrink-0 flex-col items-end gap-2">
+            {canDelete && <ReportActions reportId={report.id} />}
+            {canTriage && (
+              <ReportSettings
+                reportId={report.id}
+                allTags={allTags}
+                allCategories={allCategories}
+                selectedTagIds={tags.map((t) => t.id)}
+                categoryId={report.categoryId}
+              />
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {canTriage && (
-        <ReportTriage
-          reportId={report.id}
-          allTags={allTags}
-          allCategories={allCategories}
-          selectedTagIds={tags.map((t) => t.id)}
-          categoryId={report.categoryId}
-        />
-      )}
-
-      {/* The conversation takes the width it needs; the member list sits
-          beside it on desktop and drops below on narrow screens rather
-          than squeezing the thread. */}
+      {/* The thread takes the width it needs; the member list sits beside
+          it on desktop and drops below on narrow screens. */}
       <div className="flex flex-col gap-5 md:flex-row md:items-start">
         <div className="min-w-0 flex-1">
-          <ReportTimeline
+          <ReportThread
             reportId={report.id}
+            body={{
+              description: report.description,
+              attachments: report.attachments ?? [],
+              createdAt: report.createdAt.toISOString(),
+              authorId: report.reporterId,
+              authorName: reporterName,
+              authorAvatarUrl: report.reporterAvatarUrl,
+            }}
+            stages={stages}
             entries={timeline}
             meMemberId={me?.id ?? null}
             canReply={Boolean(me)}
+            canAddStage={canAddStage}
+            canRemoveStage={isAdmin}
           />
         </div>
 
@@ -127,6 +179,11 @@ export default async function ReportDetailPage({
           awayMemberIds={[...away.keys()]}
           meMemberId={me?.id ?? null}
           serverNow={nowMs()}
+          canManage={isAdmin}
+          roster={roster.map((m) => ({
+            id: m.id,
+            name: displayNameFor(m),
+          }))}
         />
       </div>
     </div>

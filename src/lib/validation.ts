@@ -63,16 +63,47 @@ export const updateCategorySchema = z.object({
 export const createTagSchema = z.object({
   name: z.string().trim().min(1, "Give the tag a name").max(40),
   tone: z.enum([...TAG_TONES] as [string, ...string[]]).optional(),
+  groupId: z.string().trim().max(64).nullable().optional(),
+});
+
+export const createTagGroupSchema = z.object({
+  name: z.string().trim().min(1, "Give the type a name").max(40),
+  // Exclusive means a report carries at most one tag of this type —
+  // Progress and Priority both want it.
+  exclusive: z.boolean().optional(),
+});
+
+export const updateTagGroupSchema = z
+  .object({
+    name: z.string().trim().min(1).max(40).optional(),
+    exclusive: z.boolean().optional(),
+  })
+  .refine((d) => d.name !== undefined || d.exclusive !== undefined, {
+    message: "Nothing to update",
+  });
+
+export const createStageSchema = z.object({
+  title: z.string().trim().min(1, "Give the stage a name").max(120),
+  note: z.string().trim().max(1000).nullable().optional(),
+});
+
+// Only an admin may pass this — everyone else acts on themselves and the
+// route ignores the field entirely. See the route for the enforcement.
+export const addParticipantSchema = z.object({
+  memberId: z.string().trim().min(1).max(64).optional(),
 });
 
 export const updateTagSchema = z
   .object({
     name: z.string().trim().min(1).max(40).optional(),
     tone: z.enum([...TAG_TONES] as [string, ...string[]]).optional(),
+    groupId: z.string().trim().max(64).nullable().optional(),
   })
-  .refine((d) => d.name !== undefined || d.tone !== undefined, {
-    message: "Nothing to update",
-  });
+  .refine(
+    (d) =>
+      d.name !== undefined || d.tone !== undefined || d.groupId !== undefined,
+    { message: "Nothing to update" }
+  );
 
 export const reorderTaxonomySchema = z.object({
   order: z.array(z.string().trim().min(1).max(64)).min(1).max(200),

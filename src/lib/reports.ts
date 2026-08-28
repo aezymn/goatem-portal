@@ -1,11 +1,11 @@
 import { db } from "@/db";
 import {
   bugParticipants,
-  bugReports,
+  bugStages,
   comments,
   members,
 } from "@/db/schema";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
 
 /**
  * Reading a bug report and the people on it.
@@ -108,6 +108,99 @@ export async function isParticipant(reportId: string, memberId: string) {
   return Boolean(row);
 }
 
+export interface StageRow {
+  id: string;
+  title: string;
+  note: string | null;
+  createdAt: string;
+  createdById: string;
+  createdByName: string;
+}
+
+export async function listStages(reportId: string): Promise<StageRow[]> {
+  const rows = await db
+    .select({
+      id: bugStages.id,
+      title: bugStages.title,
+      note: bugStages.note,
+      createdAt: bugStages.createdAt,
+      createdById: bugStages.createdById,
+      robloxUsername: members.robloxUsername,
+      discordUsername: members.discordUsername,
+    })
+    .from(bugStages)
+    .innerJoin(members, eq(bugStages.createdById, members.id))
+    .where(
+      and(eq(bugStages.bugReportId, reportId), isNull(bugStages.deletedAt))
+    )
+    .orderBy(asc(bugStages.position), asc(bugStages.createdAt));
+
+  return rows.map((r) => ({
+    id: r.id,
+    title: r.title,
+    note: r.note,
+    createdAt: r.createdAt.toISOString(),
+    createdById: r.createdById,
+    createdByName:
+      r.robloxUsername ?? r.discordUsername ?? "Unknown member",
+  }));
+}
+
+/** The stage a new comment belongs to: whichever is current. Null when a
+ * report has no stages yet, which puts the comment under the report
+ * itself. */
+export async function currentStageId(reportId: string) {
+  const [row] = await db
+    .select({ id: bugStages.id })
+    .from(bugStages)
+    .where(
+      and(eq(bugStages.bugReportId, reportId), isNull(bugStages.deletedAt))
+    )
+    .orderBy(desc(bugStages.position), desc(bugStages.createdAt))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+export async function addStage(
+  reportId: string,
+  createdById: string,
+  title: string,
+  note: string | null
+) {
+  const [maxRow] = await db
+    .select({ max: sql<number | null>`max(${bugStages.position})` })
+    .from(bugStages)
+    .where(eq(bugStages.bugReportId, reportId));
+
+  const [row] = await db
+    .insert(bugStages)
+    .values({
+      bugReportId: reportId,
+      createdById,
+      title,
+      note,
+      position: (maxRow?.max ?? -1) + 1,
+    })
+    .returning();
+  return row;
+}
+
+/** Soft delete, like everything else that holds someone's words nearby —
+ * the comments written under it survive and fall back to the report (the
+ * FK is ON DELETE SET NULL, but a soft delete doesn't even reach that). */
+export async function removeStage(stageId: string) {
+  await db
+    .update(bugStages)
+    .set({ deletedAt: new Date() })
+    .where(eq(bugStages.id, stageId));
+  // Comments written during it move back under the report rather than
+  // vanishing with the stage they can no longer point at.
+  await db
+    .update(comments)
+    .set({ stageId: null })
+    .where(eq(comments.stageId, stageId));
+}
+
 export interface TimelineEntry {
   id: string;
   body: string;
@@ -117,33 +210,21 @@ export interface TimelineEntry {
   authorName: string;
   authorAvatarUrl: string | null;
   authorRank: string;
+  /** Which stage this was said under; null means before any stage. */
+  stageId: string | null;
 }
 
 /**
- * The conversation, oldest first — the report's own description is the
- * first entry, because "the bug, then what people said about it" is one
- * thread rather than a header plus a comment list.
+ * The conversation, oldest first.
+ *
+ * The report's own description is NOT in here — it's the report, not
+ * somebody's comment, so the page renders it as the report body above the
+ * thread. Everything here is a reply, carrying the stage it was written
+ * under so the page can file it beneath that stage's marker.
  */
 export async function getReportTimeline(
   reportId: string
 ): Promise<TimelineEntry[]> {
-  const [report] = await db
-    .select({
-      id: bugReports.id,
-      body: bugReports.description,
-      attachments: bugReports.attachments,
-      createdAt: bugReports.createdAt,
-      authorId: members.id,
-      robloxUsername: members.robloxUsername,
-      discordUsername: members.discordUsername,
-      authorAvatarUrl: members.discordAvatarUrl,
-      authorRank: members.rank,
-    })
-    .from(bugReports)
-    .innerJoin(members, eq(bugReports.reporterId, members.id))
-    .where(eq(bugReports.id, reportId))
-    .limit(1);
-
   const rows = await db
     .select({
       id: comments.id,
@@ -155,23 +236,32 @@ export async function getReportTimeline(
       discordUsername: members.discordUsername,
       authorAvatarUrl: members.discordAvatarUrl,
       authorRank: members.rank,
+      stageId: comments.stageId,
     })
     .from(comments)
     .innerJoin(members, eq(comments.authorId, members.id))
     .where(and(eq(comments.bugReportId, reportId), isNull(comments.deletedAt)))
     .orderBy(asc(comments.createdAt));
 
-  const shape = (r: typeof rows[number] | typeof report): TimelineEntry => ({
+  return rows.map((r) => ({
     id: r.id,
     body: r.body,
     attachments: r.attachments ?? [],
     createdAt: r.createdAt.toISOString(),
     authorId: r.authorId,
-    authorName:
-      r.robloxUsername ?? r.discordUsername ?? "Unknown member",
+    authorName: r.robloxUsername ?? r.discordUsername ?? "Unknown member",
     authorAvatarUrl: r.authorAvatarUrl,
     authorRank: r.authorRank,
-  });
+    stageId: r.stageId,
+  }));
+}
 
-  return report ? [shape(report), ...rows.map(shape)] : rows.map(shape);
+/** Which reports the given member has joined — for marking "yours" in
+ * the list without a query per row. */
+export async function joinedReportIds(memberId: string): Promise<Set<string>> {
+  const rows = await db
+    .select({ id: bugParticipants.bugReportId })
+    .from(bugParticipants)
+    .where(eq(bugParticipants.memberId, memberId));
+  return new Set(rows.map((r) => r.id));
 }

@@ -13,8 +13,9 @@ import type { ParticipantRow } from "@/lib/reports";
  * they're around, whether they've filed a notice of absence, where they
  * are. The whole row is a link to their profile.
  *
- * Nobody is put here by anyone else. People join, and that's the only way
- * onto the list.
+ * People join themselves — that's how anyone normally gets on the list.
+ * A full admin can additionally pull someone in or take them off, for the
+ * case where a dev needs to be put on a bug they haven't seen.
  */
 export function ParticipantsPanel({
   reportId,
@@ -23,6 +24,8 @@ export function ParticipantsPanel({
   awayMemberIds,
   meMemberId,
   serverNow,
+  canManage,
+  roster,
 }: {
   reportId: string;
   participants: ParticipantRow[];
@@ -31,22 +34,34 @@ export function ParticipantsPanel({
   awayMemberIds: string[];
   meMemberId: string | null;
   serverNow: number;
+  /** Full admins may pull someone else onto a bug. Everyone else can only
+   * add or remove themselves — the server enforces the same rule. */
+  canManage: boolean;
+  roster: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const now = useNow(serverNow);
   const [busy, setBusy] = useState(false);
+  const [adding, setAdding] = useState("");
 
   const away = new Set(awayMemberIds);
   const joined = participants.some((p) => p.memberId === meMemberId);
+  const onIt = new Set(participants.map((p) => p.memberId));
 
-  async function toggleJoin() {
-    if (!meMemberId) return;
+  async function call(method: "POST" | "DELETE", memberId?: string) {
     setBusy(true);
     await fetch(`/api/reports/${reportId}/participants`, {
-      method: joined ? "DELETE" : "POST",
+      method,
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(memberId ? { memberId } : {}),
     }).catch(() => null);
     setBusy(false);
     router.refresh();
+  }
+
+  async function toggleJoin() {
+    if (!meMemberId) return;
+    await call(joined ? "DELETE" : "POST");
   }
 
   // Grouped by rank in the ladder's own order, the way the roster reads —
@@ -144,11 +159,53 @@ export function ParticipantsPanel({
                     {presence.label}
                   </span>
                 </span>
+
+                {canManage && p.memberId !== meMemberId && (
+                  <button
+                    disabled={busy}
+                    aria-label={`Remove ${name}`}
+                    onClick={(e) => {
+                      // Inside a Link, so the click has to be stopped
+                      // from also navigating to their profile.
+                      e.preventDefault();
+                      e.stopPropagation();
+                      void call("DELETE", p.memberId);
+                    }}
+                    className="ml-auto shrink-0 text-xs text-zinc-300 transition hover:text-red-600 disabled:opacity-50 dark:text-zinc-700 dark:hover:text-red-400"
+                  >
+                    ✕
+                  </button>
+                )}
               </Link>
             );
           })}
         </div>
       ))}
+
+      {canManage && (
+        <label className="flex flex-col gap-1 border-t border-zinc-200 pt-3 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:border-zinc-800">
+          Add someone
+          <select
+            value={adding}
+            disabled={busy}
+            onChange={(e) => {
+              const id = e.target.value;
+              setAdding("");
+              if (id) void call("POST", id);
+            }}
+            className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm font-normal normal-case tracking-normal text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+          >
+            <option value="">Pick someone…</option>
+            {roster
+              .filter((m) => !onIt.has(m.id))
+              .map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.name}
+                </option>
+              ))}
+          </select>
+        </label>
+      )}
     </aside>
   );
 }

@@ -7,7 +7,7 @@ import { createCommentSchema } from "@/lib/validation";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rateLimit";
-import { joinReport } from "@/lib/reports";
+import { currentStageId, joinReport } from "@/lib/reports";
 
 export async function POST(
   request: Request,
@@ -49,6 +49,11 @@ export async function POST(
       .limit(1);
     if (!report) return null;
 
+    // A reply belongs to whatever stage the bug is at right now, so the
+    // thread records what was said during each step rather than one flat
+    // list. Null when no stage exists yet — it then sits under the report.
+    const stageId = await currentStageId(id);
+
     const [comment] = await tx
       .insert(comments)
       .values({
@@ -56,6 +61,7 @@ export async function POST(
         bugReportId: id,
         authorId: author.id,
         attachments: parsed.data.attachments ?? [],
+        stageId,
       })
       .returning();
 
