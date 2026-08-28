@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AttachmentView } from "@/components/AttachmentView";
 import { AttachmentFields } from "@/components/AttachmentFields";
+import { SafeHtml } from "@/components/SafeHtml";
 import { useLiveReport } from "@/components/useLiveReport";
 import type { StageRow, TimelineEntry } from "@/lib/reports";
 
@@ -109,9 +110,10 @@ export function ReportThread({
           }
         >
           <div className="rounded-xl border border-zinc-200 bg-white p-3.5 dark:border-zinc-800 dark:bg-zinc-950">
-            <p className="whitespace-pre-wrap break-words text-sm">
-              {body.description}
-            </p>
+            <SafeHtml 
+              html={body.description} 
+              className="whitespace-pre-wrap break-words text-sm" 
+            />
             {body.attachments.length > 0 && (
               <AttachmentView urls={body.attachments} />
             )}
@@ -355,9 +357,7 @@ function Messages({
                         : "rounded-bl-sm bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
                     }`}
                   >
-                    <p className="whitespace-pre-wrap break-words">
-                      {entry.body}
-                    </p>
+                    <SafeHtml html={entry.body} className="whitespace-pre-wrap break-words" />
                   </div>
                   {onReply && (
                     <ReplyButton onClick={() => onReply(entry)} />
