@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { AttachmentView } from "@/components/AttachmentView";
 import { AttachmentFields } from "@/components/AttachmentFields";
 import { SafeHtml } from "@/components/SafeHtml";
+import { ConfirmAction } from "@/components/ConfirmAction";
 import { useLiveReport } from "@/components/useLiveReport";
 import type { StageRow, TimelineEntry } from "@/lib/reports";
 
@@ -528,15 +529,10 @@ function RemoveStage({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   return (
-    <button
-      disabled={busy}
-      onClick={async () => {
-        if (
-          !confirm(
-            "Remove this stage?\n\nAnything said during it moves back under the report."
-          )
-        )
-          return;
+    <ConfirmAction
+      title="Remove stage?"
+      description="Anything said during it moves back under the report."
+      onConfirm={async () => {
         setBusy(true);
         await fetch(`/api/reports/${reportId}/stages/${stageId}`, {
           method: "DELETE",
@@ -544,10 +540,14 @@ function RemoveStage({
         setBusy(false);
         router.refresh();
       }}
-      className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
     >
-      Remove
-    </button>
+      <button
+        disabled={busy}
+        className="text-xs text-zinc-400 hover:text-red-600 disabled:opacity-50 dark:hover:text-red-400"
+      >
+        Remove
+      </button>
+    </ConfirmAction>
   );
 }
 
