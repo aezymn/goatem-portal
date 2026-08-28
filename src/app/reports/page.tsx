@@ -1,13 +1,10 @@
 import Link from "next/link";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import { db } from "@/db";
-import { bugCategories, bugReports, members } from "@/db/schema";
-import { and, asc, desc, eq, exists, isNotNull, isNull, sql } from "drizzle-orm";
-import { bugReportTags } from "@/db/schema";
-import { listTags, tagsForReports } from "@/lib/bugTaxonomy";
 import { getMemberByDiscordId } from "@/lib/members";
 import { joinedReportIds } from "@/lib/reports";
+import { getBugReportsList } from "@/db/repositories/reports";
+import { listTags, tagsForReports } from "@/lib/bugTaxonomy";
 import { TagChip } from "@/components/TagChip";
 import { ReportFilters } from "@/components/ReportFilters";
 
@@ -43,60 +40,7 @@ export default async function ReportsPage({
   // the report list needs no elevated tier (any signed-in roster member
   // can see it) — mutations are where the real per-action checks live,
   // in the API routes.
-  const rows = await db
-    .select({
-      id: bugReports.id,
-      title: bugReports.title,
-      createdAt: bugReports.createdAt,
-      reporterUsername: members.robloxUsername,
-      categoryId: bugReports.categoryId,
-      categoryName: bugCategories.name,
-      categoryPosition: bugCategories.position,
-      // Aliased and fully qualified on purpose — see the note in
-      // src/lib/bugTaxonomy.ts about drizzle emitting bare column names
-      // inside sql`` templates. This query happens to have joins (which
-      // makes drizzle qualify them), but depending on that is how the
-      // category counts silently read zero.
-      replyCount: sql<number>`(
-        select count(*)::int from "comments" c
-        where c."bug_report_id" = "bug_reports"."id"
-          and c."deleted_at" is null
-      )`,
-      participantCount: sql<number>`(
-        select count(*)::int from "bug_participants" bp
-        where bp."bug_report_id" = "bug_reports"."id"
-      )`,
-    })
-    .from(bugReports)
-    .innerJoin(members, eq(bugReports.reporterId, members.id))
-    .leftJoin(bugCategories, eq(bugReports.categoryId, bugCategories.id))
-    .where(
-      and(
-        isNull(bugReports.deletedAt),
-        // Archived reports are out of the way by default, not gone.
-        showArchived
-          ? isNotNull(bugReports.archivedAt)
-          : isNull(bugReports.archivedAt),
-        // One EXISTS per selected tag, so the filters compose as AND
-        // rather than "has any of these".
-        ...tagFilter.map((tagId) =>
-          exists(
-            db
-              .select({ one: sql`1` })
-              .from(bugReportTags)
-              .where(
-                and(
-                  eq(bugReportTags.bugReportId, bugReports.id),
-                  eq(bugReportTags.tagId, tagId)
-                )
-              )
-          )
-        )
-      )
-    )
-    .orderBy(asc(bugCategories.position), desc(bugReports.createdAt))
-    .limit(50)
-    .offset(offset);
+  const rows = await getBugReportsList(tagFilter, showArchived, offset);
   
   const [tags, allTags] = await Promise.all([
     tagsForReports(rows.map((r) => r.id)),
