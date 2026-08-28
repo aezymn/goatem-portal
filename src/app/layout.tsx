@@ -1,26 +1,28 @@
 import type { Metadata } from "next";
+import { getServerSession } from "next-auth";
 import "./globals.css";
+import { authOptions } from "@/lib/auth";
 import { Providers } from "@/components/Providers";
-import { Navbar } from "@/components/Navbar";
-
-// Deliberately a system font stack rather than next/font/google — one
-// fewer external host the app (and its CSP) depends on at build or run
-// time, which matters more for an internal tool than a custom typeface
-// does.
+import { Sidebar } from "@/components/Sidebar";
 
 export const metadata: Metadata = {
   title: "Quality Assurance — Goatem Studios",
-  description: "Staff roster and bug tracking for Goatem Studios",
+  description: "Roster, bug tracking, testing logs and absences for Goatem Studios",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const session = await getServerSession(authOptions);
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full flex flex-col bg-zinc-50 dark:bg-black">
-        <Providers>
-          <Navbar />
-          <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-8">
-            {children}
+      <body className="min-h-full bg-zinc-50 dark:bg-black">
+        <Providers session={session}>
+          <Sidebar />
+          {/* The sidebar is fixed, so the content is offset rather than
+              sharing a flex row — that keeps it in place while the page
+              scrolls, and lets it become an overlay on mobile without the
+              main column jumping around. */}
+          <main className="min-h-screen px-6 py-8 md:pl-72 md:pr-8">
+            <div className="mx-auto w-full max-w-5xl">{children}</div>
           </main>
         </Providers>
       </body>

@@ -43,6 +43,13 @@
       "when": 1787856334124,
       "tag": "0005_roster_avatars",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787856335124,
+      "tag": "0006_absences_and_test_logs",
+      "breakpoints": true
     }
   ]
 }

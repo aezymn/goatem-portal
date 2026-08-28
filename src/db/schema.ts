@@ -19,6 +19,7 @@ import {
   pgEnum,
   integer,
   boolean,
+  date,
   primaryKey,
   index,
   type AnyPgColumn,
@@ -221,10 +222,63 @@ export const auditLog = pgTable(
   ]
 );
 
+// A notice, not a request: nobody approves these. Someone says when they
+// go and when they're back, and the studio can see it. `returnDate` is
+// the first day they're AVAILABLE again, not their last day away — the
+// distinction matters when reading "who's around this week", so it's
+// named for what it means rather than left ambiguous.
+export const absences = pgTable(
+  "absences",
+  {
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => members.id),
+    leaveDate: date("leave_date").notNull(),
+    returnDate: date("return_date").notNull(),
+    reason: text("reason"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("absences_member_id_idx").on(table.memberId),
+    index("absences_leave_date_idx").on(table.leaveDate),
+  ]
+);
+
+// A record of testing done — the counterpart to a bug report. Bug reports
+// capture individual defects; these capture the effort, so someone who
+// tested thoroughly and found nothing still has something to show for it.
+export const testLogs = pgTable(
+  "test_logs",
+  {
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => members.id),
+    area: text("area").notNull(),
+    findings: text("findings").notNull(),
+    minutesSpent: integer("minutes_spent"),
+    testedAt: date("tested_at").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("test_logs_member_id_idx").on(table.memberId),
+    index("test_logs_tested_at_idx").on(table.testedAt),
+  ]
+);
+
 export const membersRelations = relations(members, ({ one, many }) => ({
   reportsFiled: many(bugReports, { relationName: "reportsFiled" }),
   reportsAssigned: many(bugReports, { relationName: "reportsAssigned" }),
   comments: many(comments),
+  absences: many(absences),
+  testLogs: many(testLogs),
   parent: one(members, {
     fields: [members.parentMemberId],
     references: [members.id],
@@ -266,5 +320,23 @@ export type BugReport = typeof bugReports.$inferSelect;
 export type NewBugReport = typeof bugReports.$inferInsert;
 export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
+export const absencesRelations = relations(absences, ({ one }) => ({
+  member: one(members, {
+    fields: [absences.memberId],
+    references: [members.id],
+  }),
+}));
+
+export const testLogsRelations = relations(testLogs, ({ one }) => ({
+  member: one(members, {
+    fields: [testLogs.memberId],
+    references: [members.id],
+  }),
+}));
+
+export type Absence = typeof absences.$inferSelect;
+export type NewAbsence = typeof absences.$inferInsert;
+export type TestLog = typeof testLogs.$inferSelect;
+export type NewTestLog = typeof testLogs.$inferInsert;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type NewAuditLogEntry = typeof auditLog.$inferInsert;

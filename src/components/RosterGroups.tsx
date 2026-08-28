@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { DiscordNameCell } from "@/components/DiscordNameCell";
 import { YesNoUnknown } from "@/components/RosterStatusCell";
@@ -131,15 +132,20 @@ export function RosterGroups({
 
                     <div className="flex min-w-0 flex-col leading-tight">
                       <span className="flex items-center gap-1.5">
-                        <span
-                          className={`truncate ${
+                        {/* The name is the way into someone's activity —
+                            recent tests, bugs filed, absences — so it's a
+                            link even when no Roblox account is linked yet,
+                            since the profile is still worth reaching. */}
+                        <Link
+                          href={`/members/${m.id}`}
+                          className={`truncate hover:underline ${
                             m.robloxUsername
                               ? "text-sm font-medium"
                               : "text-sm italic text-zinc-400"
                           }`}
                         >
                           {m.robloxUsername ?? "not linked"}
-                        </span>
+                        </Link>
                         {m.isCreator && <Badge tone="emerald">Creator</Badge>}
                         {m.isPortalAdmin && !m.isCreator && (
                           <Badge tone="indigo">Admin</Badge>

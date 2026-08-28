@@ -96,3 +96,33 @@ export const linkRobloxSchema = z.object({
 export const addAltSchema = z.object({
   robloxUsername: robloxUsernameSchema,
 });
+
+// Dates come from <input type="date">, so they arrive as YYYY-MM-DD and
+// stay that way — a plain date column, not a timestamp. Absence is about
+// which DAYS someone is away; attaching a time to it would only invite
+// timezone bugs for no benefit.
+const isoDate = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, "Pick a date");
+
+export const createAbsenceSchema = z
+  .object({
+    leaveDate: isoDate,
+    // The first day back and AVAILABLE, not the last day away.
+    returnDate: isoDate,
+    reason: z.string().trim().max(500).optional(),
+  })
+  .refine((d) => d.returnDate >= d.leaveDate, {
+    message: "The return date can't be before the leave date",
+    path: ["returnDate"],
+  });
+
+export const createTestLogSchema = z.object({
+  area: z.string().trim().min(2, "What did you test?").max(120),
+  findings: z.string().trim().min(1, "Add what you found").max(5000),
+  // Optional: not every session is worth timing, and forcing a number
+  // invites made-up ones.
+  minutesSpent: z.coerce.number().int().min(1).max(1440).nullable().optional(),
+  testedAt: isoDate,
+});
