@@ -4,7 +4,7 @@ import { db } from "@/db";
 import { members } from "@/db/schema";
 import { asc, isNull } from "drizzle-orm";
 import { hasAction, isCreatorDiscordId } from "@/lib/permissions";
-import { isRobloxGroupConfigured } from "@/lib/roblox";
+import { isRobloxGroupConfigured, generateVerificationCode } from "@/lib/roblox";
 import { listRanksWithActions } from "@/lib/ranks";
 import { currentAbsencesByMemberId } from "@/lib/activity";
 import { asRegion } from "@/lib/regions";
@@ -126,13 +126,14 @@ export default async function RosterPage() {
         serverNow={nowMs()}
       />
 
-      {me && (
+      {me && myDiscordId && (
         <LinkRobloxPanel
           linkedUsername={me.robloxUsername}
           alts={myAlts.map((a) => ({
             id: a.id,
             robloxUsername: a.robloxUsername,
           }))}
+          verificationCode={generateVerificationCode(myDiscordId)}
         />
       )}
 

@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getMemberByDiscordId } from "@/lib/members";
 import { addAltSchema } from "@/lib/validation";
-import { lookupRobloxAccount } from "@/lib/roblox";
+import { lookupRobloxAccount, generateVerificationCode, getRobloxDescription } from "@/lib/roblox";
 import { checkRateLimit } from "@/lib/rateLimit";
 import { logAudit } from "@/lib/audit";
 
@@ -82,6 +82,23 @@ export async function POST(request: Request) {
     return NextResponse.json(
       { error: "That Roblox account is already on the roster." },
       { status: 409 }
+    );
+  }
+
+  const expectedCode = generateVerificationCode(discordId);
+  const description = await getRobloxDescription(account.user.id);
+  
+  if (description === null) {
+    return NextResponse.json(
+      { error: "Could not fetch Roblox profile to verify ownership. Try again later." },
+      { status: 502 }
+    );
+  }
+
+  if (!description.includes(expectedCode)) {
+    return NextResponse.json(
+      { error: `Verification failed. Please add "${expectedCode}" to your alt account's Roblox profile 'About' section and try again.` },
+      { status: 403 }
     );
   }
 

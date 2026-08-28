@@ -1,3 +1,5 @@
+import { createHash } from "crypto";
+
 // Roblox lookups: turning a username someone typed into a real account,
 // and answering "are they in the studio's group" (which is what the
 // roster's GAME ACCESS column reports).
@@ -11,6 +13,11 @@
 // "unknown" — deliberately distinct from a confirmed "no". A roster that
 // says "unknown" during a Roblox outage is honest; one that says "no
 // access" would be actively misleading.
+
+export function generateVerificationCode(discordId: string): string {
+  const secret = process.env.NEXTAUTH_SECRET || "fallback-secret";
+  return "QA-" + createHash("sha256").update(discordId + secret).digest("hex").slice(0, 6).toUpperCase();
+}
 
 interface RobloxUser {
   id: number;
@@ -57,6 +64,29 @@ export async function resolveRobloxUser(
     return null;
   }
 }
+
+/**
+ * Fetches the user's profile description (About me) by their Roblox User ID.
+ * Returns null if the lookup fails.
+ */
+export async function getRobloxDescription(userId: number | string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://users.roblox.com/v1/users/${userId}`, {
+      // No caching so we get the fresh description right after they save it
+      cache: "no-store", 
+    });
+    if (!res.ok) {
+      console.error("roblox description lookup failed:", res.status);
+      return null;
+    }
+    const body = (await res.json()) as { description?: string };
+    return body.description ?? "";
+  } catch (err) {
+    console.error("roblox description lookup threw:", err);
+    return null;
+  }
+}
+
 
 /**
  * Whether a Roblox user is a member of the configured group.

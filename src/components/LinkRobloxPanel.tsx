@@ -12,9 +12,11 @@ import { useState } from "react";
 export function LinkRobloxPanel({
   linkedUsername,
   alts,
+  verificationCode,
 }: {
   linkedUsername: string | null;
   alts: { id: string; robloxUsername: string | null }[];
+  verificationCode: string;
 }) {
   const router = useRouter();
   const [value, setValue] = useState("");
@@ -65,6 +67,18 @@ export function LinkRobloxPanel({
           ? "Enter your Roblox username so the roster can show whether you have access to the game."
           : "Add alternate accounts you test with — each one is checked for group membership separately."}
       </p>
+
+      <div className="mt-4 rounded-md bg-zinc-50 p-3 text-sm text-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-800">
+        <p className="font-medium mb-1">Verification Required</p>
+        <p className="text-xs">
+          To prove you own the account, please paste the following code into your Roblox profile&apos;s <strong>About</strong> section before clicking Link:
+        </p>
+        <div className="mt-2 flex items-center gap-2">
+          <code className="rounded bg-white px-2 py-1 font-mono text-sm shadow-sm dark:bg-zinc-950 dark:text-zinc-200">
+            {verificationCode}
+          </code>
+        </div>
+      </div>
 
       {!isLinking && (
         <ul className="mt-3 flex flex-wrap gap-2 text-sm">
