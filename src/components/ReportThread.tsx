@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
+import { createCommentAction } from "@/app/actions/comments";
 import { AttachmentView } from "@/components/AttachmentView";
 import { AttachmentFields } from "@/components/AttachmentFields";
 import { SafeHtml } from "@/components/SafeHtml";
@@ -561,22 +562,15 @@ function Composer({
     setBusy(true);
     setError(null);
 
-    const res = await fetch(`/api/reports/${reportId}/comments`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        body: body.trim(),
-        attachments,
-        replyToId: replyTo?.id ?? null,
-      }),
-    }).catch(() => null);
+    const res = await createCommentAction(reportId, {
+      body: body.trim(),
+      attachments,
+      replyToId: replyTo?.id ?? null,
+    });
 
     setBusy(false);
-    if (!res || !res.ok) {
-      setError(
-        (await res?.json().catch(() => null))?.error ??
-          "Couldn't post that. Try again."
-      );
+    if (res.error) {
+      setError(res.error ?? "Couldn't post that. Try again.");
       return;
     }
 
@@ -584,6 +578,7 @@ function Composer({
     setAttachments([]);
     setShowAttach(false);
     onClearReply();
+    // Server action already revalidates path, but we can refresh router just in case
     router.refresh();
   }
 
