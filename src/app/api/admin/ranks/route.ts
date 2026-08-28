@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { requireAdmin } from "@/lib/requireSession";
 import { createRankSchema } from "@/lib/validation";
-import { createRank, getCachedRanks } from "@/lib/ranks";
+import { createRank, listRanksWithActions } from "@/lib/ranks";
 import { listGuildRoles } from "@/lib/discordBot";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
@@ -15,7 +15,7 @@ export async function GET() {
   if (!auth.ok) return auth.response;
 
   const [ranks, discordRoles] = await Promise.all([
-    getCachedRanks(),
+    listRanksWithActions(),
     listGuildRoles(),
   ]);
 

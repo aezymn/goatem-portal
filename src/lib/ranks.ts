@@ -1,7 +1,6 @@
 import { db } from "@/db";
 import { members, ranks, rankActionPermissions } from "@/db/schema";
 import { and, asc, count, eq, isNull, max } from "drizzle-orm";
-import { revalidatePath, unstable_cache } from "next/cache";
 import type { RankAction } from "@/lib/permissions";
 import { isRankAction } from "@/lib/permissions";
 
@@ -83,16 +82,6 @@ export async function listRanksWithActions(): Promise<RankWithActions[]> {
   return [...known.values()].sort((a, b) => a.position - b.position);
 }
 
-/** 
- * Cached version of listRanksWithActions. 
- * Revalidates automatically when any rank changes.
- */
-export const getCachedRanks = unstable_cache(
-  async () => listRanksWithActions(),
-  ["all-ranks"],
-  { tags: ["ranks"] }
-);
-
 /** Makes sure a rank row exists (e.g. when a member is added to the
  * roster with a brand-new rank name) so it immediately shows up on the
  * Ranks admin page instead of only appearing via the defensive merge
@@ -125,8 +114,6 @@ export async function reorderRanks(orderedNames: string[]): Promise<void> {
         .where(eq(ranks.name, orderedNames[i]));
     }
   });
-  revalidatePath("/admin/ranks");
-  revalidatePath("/roster");
 }
 
 /** Sets (or clears, with null) which Discord role a rank is bound to. */
@@ -138,8 +125,6 @@ export async function setRankDiscordRole(
     .update(ranks)
     .set({ discordRoleId, updatedAt: new Date() })
     .where(eq(ranks.name, rank));
-  revalidatePath("/admin/ranks");
-  revalidatePath("/roster");
 }
 
 /** Turns one action on or off for a rank. */
@@ -163,8 +148,6 @@ export async function setRankAction(
         )
       );
   }
-  revalidatePath("/admin/ranks");
-  revalidatePath("/roster");
 }
 
 /** Creates a new, empty rank at the bottom of the ladder. Returns false
@@ -179,12 +162,7 @@ export async function createRank(name: string): Promise<boolean> {
     .values({ name, position: (value ?? -1) + 1 })
     .onConflictDoNothing({ target: ranks.name })
     .returning();
-  if (inserted.length > 0) {
-    revalidatePath("/admin/ranks");
-  revalidatePath("/roster");
-    return true;
-  }
-  return false;
+  return inserted.length > 0;
 }
 
 export type DeleteRankResult =
@@ -192,6 +170,19 @@ export type DeleteRankResult =
   | { ok: false; reason: "in-use"; memberCount: number }
   | { ok: false; reason: "not-found" };
 
+/**
+ * Removes a rank outright.
+ *
+ * Refused while anyone still holds it: members.rank is a plain text
+ * column, so deleting a rank in use would leave those people pointing at
+ * something that no longer exists — invisible on this page, and silently
+ * granting nothing. Move them first, and the deletion becomes safe.
+ *
+ * This is a genuine delete rather than the soft-delete used for people
+ * and reports, because a rank nobody holds is configuration, not history
+ * — and the audit log still records that it happened. Its action rows go
+ * with it via ON DELETE CASCADE.
+ */
 export async function deleteRank(name: string): Promise<DeleteRankResult> {
   const [{ n } = { n: 0 }] = await db
     .select({ n: count() })
@@ -203,8 +194,6 @@ export async function deleteRank(name: string): Promise<DeleteRankResult> {
 
   const deleted = await db.delete(ranks).where(eq(ranks.name, name)).returning();
   if (deleted.length === 0) return { ok: false, reason: "not-found" };
-  revalidatePath("/admin/ranks");
-  revalidatePath("/roster");
   return { ok: true };
 }
 
@@ -213,13 +202,27 @@ export type RenameRankResult =
   | { ok: false; reason: "not-found" }
   | { ok: false; reason: "name-taken" };
 
+/**
+ * Renames a rank, taking everything that points at it along.
+ *
+ * Two separate things reference a rank by name, and they must not be
+ * allowed to disagree even for an instant:
+ *   - rank_action_permissions, via a real foreign key — carried
+ *     automatically by ON UPDATE CASCADE (migration 0004).
+ *   - members.rank, plain text with no key, so it's updated here by hand.
+ *
+ * Both happen in one transaction: either the rank, its permissions and
+ * everyone holding it all move together, or nothing does. A half-applied
+ * rename would silently strip people of whatever their rank granted,
+ * which is exactly the failure this guards against.
+ */
 export async function renameRank(
   from: string,
   to: string
 ): Promise<RenameRankResult> {
   if (from === to) return { ok: true, movedMembers: 0 };
 
-  const result = await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
     const [existing] = await tx
       .select()
       .from(ranks)
@@ -234,11 +237,15 @@ export async function renameRank(
       .limit(1);
     if (clash) return { ok: false, reason: "name-taken" as const };
 
+    // Permission rows follow via ON UPDATE CASCADE.
     await tx
       .update(ranks)
       .set({ name: to, updatedAt: new Date() })
       .where(eq(ranks.name, from));
 
+    // Members don't — no foreign key — so move them explicitly. Includes
+    // soft-deleted rows on purpose: if someone is restored later, their
+    // rank should still mean something.
     const moved = await tx
       .update(members)
       .set({ rank: to, updatedAt: new Date() })
@@ -247,10 +254,4 @@ export async function renameRank(
 
     return { ok: true as const, movedMembers: moved.length };
   });
-
-  if (result.ok) {
-    revalidatePath("/admin/ranks");
-    revalidatePath("/roster");
-  }
-  return result as RenameRankResult;
 }

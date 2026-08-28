@@ -1,4 +1,4 @@
-import { getCachedRanks } from "@/lib/ranks";
+import { listRanksWithActions } from "@/lib/ranks";
 import { listGuildRoles } from "@/lib/discordBot";
 import { RanksBoard } from "@/components/RanksBoard";
 
@@ -7,7 +7,7 @@ import { RanksBoard } from "@/components/RanksBoard";
 
 export default async function RanksPage() {
   const [ranks, discordRoles] = await Promise.all([
-    getCachedRanks(),
+    listRanksWithActions(),
     listGuildRoles(),
   ]);
 

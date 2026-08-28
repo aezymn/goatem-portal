@@ -5,7 +5,7 @@ import { members } from "@/db/schema";
 import { asc, isNull } from "drizzle-orm";
 import { hasAction, isCreatorDiscordId } from "@/lib/permissions";
 import { isRobloxGroupConfigured } from "@/lib/roblox";
-import { getCachedRanks } from "@/lib/ranks";
+import { listRanksWithActions } from "@/lib/ranks";
 import { currentAbsencesByMemberId } from "@/lib/activity";
 import { asRegion } from "@/lib/regions";
 import { nowMs } from "@/lib/presence";
@@ -35,7 +35,7 @@ export default async function RosterPage() {
       .from(members)
       .where(isNull(members.deletedAt))
       .orderBy(asc(members.robloxUsername), asc(members.discordUsername)),
-    getCachedRanks(),
+    listRanksWithActions(),
     currentAbsencesByMemberId(),
   ]);
 
