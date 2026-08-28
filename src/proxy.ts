@@ -36,7 +36,23 @@ export async function proxy(request: Request) {
   }
 
   if (pathname.startsWith("/admin")) {
-    const isFullAdmin = Boolean(token?.isCreator || token?.isPortalAdmin);
+    // The environment is the authority on who is CREATOR, so it's read
+    // here rather than trusting the token's own claim. It's checked BOTH
+    // ways round: a token claiming isCreator can't wave itself past the
+    // /admin/admins gate below, and — the case that bit — somebody added
+    // to PORTAL_CREATOR_DISCORD_ID while already signed in gets in
+    // straight away instead of being bounced for up to a recheck
+    // interval by a token that still says false.
+    //
+    // Typed explicitly: `match(...) ?? []` widens the empty branch to
+    // never[], and .includes(string) on that is a type error.
+    const creatorIds: string[] =
+      process.env.PORTAL_CREATOR_DISCORD_ID?.match(/\d{15,25}/g) ?? [];
+    const isCreator = Boolean(
+      token?.discordId && creatorIds.includes(token.discordId)
+    );
+
+    const isFullAdmin = Boolean(isCreator || token?.isPortalAdmin);
     // Bug setup is a rank-grantable action, so it can't sit behind the
     // blanket admin gate the rest of /admin uses. The page re-checks the
     // action server-side; this only decides whether to let them through.
@@ -53,17 +69,12 @@ export async function proxy(request: Request) {
     if (!isFullAdmin) {
       return NextResponse.redirect(new URL("/access-denied", request.url));
     }
-    // /admin/admins is further restricted to the CREATOR alone — a portal
-    // admin can see everything else under /admin but not this page.
-    // Compared against PORTAL_CREATOR_DISCORD_ID rather than the token's
-    // own isCreator flag, so this can't be waved through by a token that
-    // merely claims it. Real enforcement is still server-side
-    // (requireCreator() on its API routes, plus the page's own check).
-    const creatorId = process.env.PORTAL_CREATOR_DISCORD_ID?.trim();
-    if (
-      pathname.startsWith("/admin/admins") &&
-      (!creatorId || token?.discordId !== creatorId)
-    ) {
+    // /admin/admins is further restricted to CREATORs alone — a portal
+    // admin can see everything else under /admin but not this page. Real
+    // enforcement is still server-side (requireCreator() on its API
+    // routes, plus the page's own check); this only avoids showing
+    // someone a page that would refuse them.
+    if (pathname.startsWith("/admin/admins") && !isCreator) {
       return NextResponse.redirect(new URL("/access-denied", request.url));
     }
   }

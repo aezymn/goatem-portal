@@ -29,7 +29,15 @@
 // piece gets resolved.
 
 /**
- * The Discord ID configured as CREATOR, or null if none is.
+ * The Discord IDs configured as CREATOR.
+ *
+ * More than one is allowed: separate them with commas (or spaces, or
+ * newlines — anything that isn't a digit is a separator). Every CREATOR
+ * is equal; there is no primary. Since the list lives only in the
+ * environment, a CREATOR can't add, remove or demote another one from
+ * inside the portal — changing who they are still means changing an
+ * environment variable in the hosting dashboard, which is the whole
+ * point of keeping this outside the app.
  *
  * Tolerates surrounding quotes and whitespace: a .env file strips quotes
  * when it loads, but a hosting dashboard (Vercel's env var UI, say)
@@ -39,30 +47,31 @@
  * right; failing closed on a *plausible transcription* of the right
  * answer is just a trap.
  */
-function configuredCreatorId(): string | null {
+export function configuredCreatorIds(): string[] {
   const raw = process.env.PORTAL_CREATOR_DISCORD_ID?.trim();
-  if (!raw) return null;
-  const unquoted = raw.replace(/^['"]+|['"]+$/g, "").trim();
-  return unquoted || null;
+  if (!raw) return [];
+  // Discord IDs are digits, so anything else between them is a
+  // separator — commas, spaces, quotes and stray brackets all work
+  // without the config having to be typed in one exact shape.
+  return raw.match(/\d{15,25}/g) ?? [];
 }
 
-/** Whether a CREATOR is configured at all — booleans only, no value.
+/** Whether any CREATOR is configured at all — booleans only, no value.
  * Used by the /api/whoami diagnostic to tell "nobody is configured"
  * apart from "someone is, but it isn't you." */
 export function isCreatorConfigured(): boolean {
-  return configuredCreatorId() !== null;
+  return configuredCreatorIds().length > 0;
 }
 
 /**
- * True only for the one Discord account named by
- * PORTAL_CREATOR_DISCORD_ID. Returns false when that variable is unset
- * or blank — failing closed, so a misconfigured deploy grants nobody
- * CREATOR rather than everybody.
+ * True only for a Discord account named by PORTAL_CREATOR_DISCORD_ID.
+ * Returns false when that variable is unset, blank, or holds nothing that
+ * looks like an ID — failing closed, so a misconfigured deploy grants
+ * nobody CREATOR rather than everybody.
  */
 export function isCreatorDiscordId(discordId: string | undefined): boolean {
-  const configured = configuredCreatorId();
-  if (!configured || !discordId) return false;
-  return discordId === configured;
+  if (!discordId) return false;
+  return configuredCreatorIds().includes(discordId);
 }
 
 export const RANK_ACTIONS = [
