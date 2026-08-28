@@ -5,6 +5,7 @@ import { authOptions } from "@/lib/auth";
 import { Providers } from "@/components/Providers";
 import { Sidebar } from "@/components/Sidebar";
 import { PresenceBeacon } from "@/components/PresenceBeacon";
+import { Toaster } from "sonner";
 
 export const metadata: Metadata = {
   title: "Quality Assurance — Goatem Studios",
@@ -26,6 +27,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
           <main className="min-h-screen px-6 py-8 md:pl-72 md:pr-8">
             <div className="mx-auto w-full max-w-5xl">{children}</div>
           </main>
+          <Toaster position="bottom-right" theme="system" richColors />
         </Providers>
       </body>
     </html>

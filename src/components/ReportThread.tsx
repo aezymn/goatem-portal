@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useState, useOptimistic } from "react";
 import { createCommentAction } from "@/app/actions/comments";
+import { toast } from "sonner";
+import { motion, AnimatePresence } from "framer-motion";
 import { AttachmentView } from "@/components/AttachmentView";
 import { AttachmentFields } from "@/components/AttachmentFields";
 import { SafeHtml } from "@/components/SafeHtml";
@@ -61,6 +63,11 @@ export function ReportThread({
   const [replyTo, setReplyTo] = useState<TimelineEntry | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
+  const [optimisticEntries, addOptimisticEntry] = useOptimistic(
+    entries,
+    (state: TimelineEntry[], newEntry: TimelineEntry) => [...state, newEntry]
+  );
+
   function toggleStage(id: string) {
     setCollapsed((prev) => {
       const next = new Set(prev);
@@ -71,7 +78,7 @@ export function ReportThread({
   }
 
   const byStage = new Map<string | null, TimelineEntry[]>();
-  for (const entry of entries) {
+  for (const entry of optimisticEntries) {
     const key = entry.stageId ?? null;
     byStage.set(key, [...(byStage.get(key) ?? []), entry]);
   }
@@ -191,6 +198,8 @@ export function ReportThread({
           reportId={reportId}
           replyTo={replyTo}
           onClearReply={() => setReplyTo(null)}
+          onSendOptimistic={(newEntry) => addOptimisticEntry(newEntry)}
+          meMemberId={meMemberId!}
         />
       ) : (
         <p className="border-t border-zinc-200 pt-3 text-sm text-zinc-500 dark:border-zinc-800">
@@ -292,16 +301,21 @@ function Messages({
   if (entries.length === 0) return null;
   return (
     <ol className="flex flex-col gap-3">
-      {entries.map((entry, i) => {
-        const mine = meMemberId !== null && entry.authorId === meMemberId;
-        const runsOn = i > 0 && entries[i - 1].authorId === entry.authorId;
+      <AnimatePresence initial={false}>
+        {entries.map((entry, i) => {
+          const mine = meMemberId !== null && entry.authorId === meMemberId;
+          const runsOn = i > 0 && entries[i - 1].authorId === entry.authorId;
+          const isOptimistic = entry.id.startsWith("temp-");
 
-        return (
-          <li
-            key={entry.id}
-            id={`m-${entry.id}`}
-            className={`group/msg flex gap-2.5 ${mine ? "flex-row-reverse" : ""}`}
-          >
+          return (
+            <motion.li
+              key={entry.id}
+              initial={{ opacity: 0, y: 10, scale: 0.98 }}
+              animate={{ opacity: isOptimistic ? 0.7 : 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.2, ease: "easeOut" }}
+              id={`m-${entry.id}`}
+              className={`group/msg flex gap-2.5 ${mine ? "flex-row-reverse" : ""}`}
+            >
             <div className="w-8 shrink-0">
               {!runsOn && <Avatar entry={entry} />}
             </div>
@@ -387,9 +401,10 @@ function Messages({
                 </div>
               )}
             </div>
-          </li>
+          </motion.li>
         );
       })}
+      </AnimatePresence>
     </ol>
   );
 }
@@ -428,13 +443,11 @@ function AddStage({ reportId }: { reportId: string }) {
   const [title, setTitle] = useState("");
   const [note, setNote] = useState("");
   const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!title.trim()) return;
     setBusy(true);
-    setError(null);
     const res = await fetch(`/api/reports/${reportId}/stages`, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -442,11 +455,12 @@ function AddStage({ reportId }: { reportId: string }) {
     }).catch(() => null);
     setBusy(false);
     if (!res?.ok) {
-      setError(
+      toast.error(
         (await res?.json().catch(() => null))?.error ?? "Couldn't add that."
       );
       return;
     }
+    toast.success("Stage added");
     setTitle("");
     setNote("");
     setOpen(false);
@@ -499,9 +513,6 @@ function AddStage({ reportId }: { reportId: string }) {
         >
           Cancel
         </button>
-        {error && (
-          <span className="text-xs text-red-600 dark:text-red-400">{error}</span>
-        )}
       </div>
     </form>
   );
@@ -544,41 +555,65 @@ function Composer({
   reportId,
   replyTo,
   onClearReply,
+  onSendOptimistic,
+  meMemberId,
 }: {
   reportId: string;
   replyTo: TimelineEntry | null;
   onClearReply: () => void;
+  onSendOptimistic: (entry: TimelineEntry) => void;
+  meMemberId: string;
 }) {
   const router = useRouter();
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
   const [showAttach, setShowAttach] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   async function send(e: React.FormEvent) {
     e.preventDefault();
     if (!body.trim() && attachments.length === 0) return;
-    setBusy(true);
-    setError(null);
-
-    const res = await createCommentAction(reportId, {
+    
+    // Create optimistic entry
+    const optimisticId = `temp-${Date.now()}`;
+    const newEntry: TimelineEntry = {
+      id: optimisticId,
       body: body.trim(),
       attachments,
-      replyToId: replyTo?.id ?? null,
-    });
-
-    setBusy(false);
-    if (res.error) {
-      setError(res.error ?? "Couldn't post that. Try again.");
-      return;
-    }
-
+      authorId: meMemberId,
+      authorName: "You", // fallback
+      authorAvatarUrl: null,
+      authorRank: "Member",
+      createdAt: new Date().toISOString(),
+      stageId: null,
+      replyTo: replyTo ? {
+        id: replyTo.id,
+        authorName: replyTo.authorName,
+        excerpt: replyTo.body ? replyTo.body.substring(0, 89) + "..." : "(attachment)",
+      } : null,
+    };
+    
+    onSendOptimistic(newEntry);
+    
+    // Cache inputs and clear UI instantly
+    const sentBody = body.trim();
+    const sentAttachments = [...attachments];
+    
     setBody("");
     setAttachments([]);
     setShowAttach(false);
     onClearReply();
-    // Server action already revalidates path, but we can refresh router just in case
+
+    const res = await createCommentAction(reportId, {
+      body: sentBody,
+      attachments: sentAttachments,
+      replyToId: replyTo?.id ?? null,
+    });
+
+    if (res.error) {
+      toast.error(res.error ?? "Couldn't post that. Try again.");
+      return;
+    }
+    
     router.refresh();
   }
 
@@ -652,14 +687,12 @@ function Composer({
 
         <button
           type="submit"
-          disabled={busy || (!body.trim() && attachments.length === 0)}
+          disabled={!body.trim() && attachments.length === 0}
           className="shrink-0 rounded-md bg-indigo-600 px-3.5 py-2 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-40"
         >
-          {busy ? "Sending…" : "Send"}
+          Send
         </button>
       </div>
-
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
     </form>
   );
 }
