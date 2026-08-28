@@ -23,6 +23,8 @@ export default async function ReportsPage({
 }: PageProps<"/reports">) {
   const params = await searchParams;
   const raw = params.tag;
+  const page = parseInt(params.page as string || "1", 10);
+  const offset = (page - 1) * 50;
   // Several ?tag= values narrow the list to reports carrying ALL of them,
   // which is what picking two filters visibly means.
   const tagFilter = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter(
@@ -93,8 +95,10 @@ export default async function ReportsPage({
         )
       )
     )
-    .orderBy(asc(bugCategories.position), desc(bugReports.createdAt));
-
+    .orderBy(asc(bugCategories.position), desc(bugReports.createdAt))
+    .limit(50)
+    .offset(offset);
+  
   const [tags, allTags] = await Promise.all([
     tagsForReports(rows.map((r) => r.id)),
     listTags(),
@@ -195,6 +199,23 @@ export default async function ReportsPage({
           </section>
         ))
       )}
+
+      {/* Pagination Controls */}
+      <div className="flex justify-between items-center pt-4 border-t border-zinc-200 dark:border-zinc-800">
+        <Link
+          href={`/reports?page=${Math.max(1, page - 1)}${tagFilter.map(t => `&tag=${t}`).join('')}${showArchived ? '&archived=1' : ''}`}
+          className={`px-4 py-2 text-sm font-medium rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 ${page <= 1 ? 'opacity-50 pointer-events-none' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+        >
+          Previous
+        </Link>
+        <span className="text-sm text-zinc-500">Page {page}</span>
+        <Link
+          href={`/reports?page=${page + 1}${tagFilter.map(t => `&tag=${t}`).join('')}${showArchived ? '&archived=1' : ''}`}
+          className={`px-4 py-2 text-sm font-medium rounded-md border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-900 ${rows.length < 50 ? 'opacity-50 pointer-events-none' : 'hover:bg-zinc-50 dark:hover:bg-zinc-800'}`}
+        >
+          Next
+        </Link>
+      </div>
     </div>
   );
 }

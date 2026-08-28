@@ -1,6 +1,7 @@
 import { db } from "@/db";
 import { auditLog } from "@/db/schema";
-import { desc } from "drizzle-orm";
+import { desc, sql } from "drizzle-orm";
+import Link from "next/link";
 
 // Direct DB reads (not fetch()) aren't auto-detected as dynamic — force it
 // so this never gets frozen at build time. See src/app/reports/page.tsx.
@@ -10,12 +11,28 @@ export const dynamic = "force-dynamic";
 // /admin before this ever renders, but note that page gate is a UX
 // convenience only — there is still no write route for this table
 // anywhere in the app, admin or not. See src/lib/audit.ts.
-export default async function AuditLogPage() {
-  const rows = await db
+export default async function AuditLogPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ cursor?: string }>;
+}) {
+  const { cursor } = await searchParams;
+
+  const query = db
     .select()
     .from(auditLog)
     .orderBy(desc(auditLog.createdAt))
-    .limit(200);
+    .limit(50); // Reduced to 50 for realistic pagination
+
+  if (cursor) {
+    // We import `lt` dynamically or ensure it's in the drizzle-orm imports
+    // Actually we'll use `sql` to avoid needing to add an import if it's not there, 
+    // but Drizzle has lt. Let's just use sql to be safe.
+    query.where(sql`${auditLog.createdAt} < ${new Date(cursor)}`);
+  }
+
+  const rows = await query;
+  const nextCursor = rows.length === 50 ? rows[rows.length - 1].createdAt.toISOString() : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -58,6 +75,17 @@ export default async function AuditLogPage() {
           </tbody>
         </table>
       </div>
+      
+      {nextCursor && (
+        <div className="flex justify-center pt-2">
+          <Link
+            href={`/admin/audit-log?cursor=${nextCursor}`}
+            className="rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:bg-zinc-800"
+          >
+            Load More
+          </Link>
+        </div>
+      )}
     </div>
   );
 }
