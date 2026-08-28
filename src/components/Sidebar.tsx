@@ -40,12 +40,14 @@ const MAIN_NAV: NavItem[] = [
   { href: "/roster", label: "Roster", icon: icon("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75") },
   { href: "/absence", label: "Report Absence", icon: icon("M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z") },
   { href: "/testing", label: "Report Testing", icon: icon("M9 2v6L4.6 16.4A2 2 0 0 0 6.3 19.5h11.4a2 2 0 0 0 1.7-3.1L15 8V2M9 2h6M7.5 14h9") },
+  { href: "/changelog", label: "Change Log", icon: icon("M12 8v4l3 2M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z") },
 ];
 
 const ADMIN_NAV: NavItem[] = [
   { href: "/admin/ranks", label: "Ranks", icon: icon("M4 20V10M12 20V4M20 20v-6") },
   { href: "/admin/bug-setup", label: "Bug setup", icon: icon("M7 8h10M7 12h6M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4Z") },
   { href: "/admin/admins", label: "Admin Access", icon: icon("M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z") },
+  { href: "/changelog/manage", label: "Change log posts", icon: icon("M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z") },
   { href: "/admin/audit-log", label: "Audit Log", icon: icon("M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h6") },
 ];
 
@@ -55,9 +57,10 @@ export function Sidebar() {
   const authed = status === "authenticated" && !session?.stale;
   const isCreator = authed && session.user.isCreator;
   const isAdmin = authed && (session.user.isCreator || session.user.isPortalAdmin);
-  const canBugSetup =
-    isAdmin ||
-    (authed && (session.user.actions ?? []).includes("bugsetup.manage"));
+  const actions = authed ? (session.user.actions ?? []) : [];
+  const canBugSetup = isAdmin || actions.includes("bugsetup.manage");
+  const canSeeChangelog = isAdmin || actions.includes("changelog.view");
+  const canWriteChangelog = isAdmin || actions.includes("changelog.write");
 
   const [me, setMe] = useState<Me | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -88,6 +91,7 @@ export function Sidebar() {
     // Bug setup is grantable by rank, so someone who holds that action
     // sees it here even though the rest of Admin isn't theirs.
     if (item.href === "/admin/bug-setup") return canBugSetup;
+    if (item.href === "/changelog/manage") return canWriteChangelog;
     return isAdmin;
   });
 
@@ -129,7 +133,13 @@ export function Sidebar() {
         <nav className="flex flex-1 flex-col gap-6 overflow-y-auto px-3 py-4 md:py-2">
           {authed ? (
             <>
-              <Section items={MAIN_NAV} pathname={pathname} />
+              <Section
+                items={MAIN_NAV.filter(
+                  (item) =>
+                    item.href !== "/changelog" || canSeeChangelog
+                )}
+                pathname={pathname}
+              />
               {adminItems.length > 0 && (
                 <Section
                   heading="Admin"

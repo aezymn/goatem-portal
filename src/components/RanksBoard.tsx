@@ -23,6 +23,18 @@ const ACTION_LABELS: Record<RankAction, { short: string; hint: string }> = {
     short: "Manage bug setup",
     hint: "Create and edit the bug categories, tag types and tags everyone picks from",
   },
+  "changelog.view": {
+    short: "View change log",
+    hint: "Read the published change log",
+  },
+  "changelog.write": {
+    short: "Write change log",
+    hint: "Draft and edit change log posts, and submit them for approval",
+  },
+  "changelog.approve": {
+    short: "Approve change log",
+    hint: "Publish a change log post — the final say on what goes out",
+  },
 };
 
 interface RankRow {

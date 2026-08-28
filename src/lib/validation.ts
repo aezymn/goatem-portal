@@ -224,3 +224,46 @@ export const createTestLogSchema = z.object({
   minutesSpent: z.coerce.number().int().min(1).max(1440).nullable().optional(),
   testedAt: isoDate,
 });
+
+// --- Change log ---------------------------------------------------
+
+export const createChangelogPostSchema = z.object({
+  title: z.string().trim().min(1, "Give the post a title").max(200),
+  // Either pick a release kind and let the server work out the number, or
+  // name a version outright. The kind is the normal path; the explicit
+  // version exists because Tom asked for posts to stay editable.
+  kind: z.enum(["update", "continuation"]).optional(),
+  version: z
+    .string()
+    .trim()
+    .regex(/^v?\d{1,4}\.\d{1,4}(\.\d{1,6})?$/, "Versions look like 0.9 or 0.9.1")
+    .optional(),
+  body: z.string().trim().max(5000).nullable().optional(),
+  /** Completed bug reports to pull in as entries, pre-filled from what
+   * the devs said they changed. */
+  reportIds: z.array(z.string().trim().max(64)).max(100).optional(),
+});
+
+export const updateChangelogPostSchema = z
+  .object({
+    title: z.string().trim().min(1).max(200).optional(),
+    body: z.string().trim().max(5000).nullable().optional(),
+    version: z
+      .string()
+      .trim()
+      .regex(/^v?\d{1,4}\.\d{1,4}(\.\d{1,6})?$/, "Versions look like 0.9 or 0.9.1")
+      .optional(),
+    status: z.enum(["draft", "pending", "published"]).optional(),
+  })
+  .refine((d) => Object.values(d).some((v) => v !== undefined), {
+    message: "Nothing to update",
+  });
+
+export const changelogEntrySchema = z.object({
+  text: z.string().trim().min(1, "Write the change").max(1000),
+  bugReportId: z.string().trim().max(64).nullable().optional(),
+});
+
+export const changeNoteSchema = z.object({
+  body: z.string().trim().min(1, "Say what you changed").max(2000),
+});

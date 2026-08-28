@@ -384,6 +384,108 @@ export const bugParticipants = pgTable(
   ]
 );
 
+// What someone changed in the game because of a bug report.
+//
+// Collected by prompting whoever worked the bug once it's closed, while
+// they still remember — the change log is then written from what people
+// actually said rather than from someone reading a thread weeks later.
+// One note per person per report, editable, so the question has a single
+// answer rather than a pile of them.
+export const bugChanges = pgTable(
+  "bug_changes",
+  {
+    bugReportId: text("bug_report_id")
+      .notNull()
+      .references(() => bugReports.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "cascade" }),
+    body: text("body").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.bugReportId, table.memberId] }),
+    index("bug_changes_bug_report_id_idx").on(table.bugReportId),
+  ]
+);
+
+// A change log post — one release, one date, one version.
+//
+// The version is stored BOTH as its display string and as its three
+// numbers. The string is what people read and can hand-edit; the numbers
+// are what ordering and "what comes next" arithmetic run on, because
+// sorting "0.10" after "0.9" is only correct numerically and hopeless as
+// text. patch is null for a plain release (0.9) and set for each
+// continuation of it (0.9.0, 0.9.1, ...).
+export const changelogPosts = pgTable(
+  "changelog_posts",
+  {
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    title: text("title").notNull(),
+    version: text("version").notNull(),
+    versionMajor: integer("version_major").notNull(),
+    versionMinor: integer("version_minor").notNull(),
+    versionPatch: integer("version_patch"),
+    /** Optional preamble above the list of changes. */
+    body: text("body"),
+    // draft -> pending -> published. Publishing needs changelog.approve,
+    // which is deliberately a different grant from writing: the person
+    // who drafts a release note isn't automatically the person who
+    // decides it goes out.
+    status: text("status").notNull().default("draft"),
+    createdById: text("created_by_id")
+      .notNull()
+      .references(() => members.id),
+    approvedById: text("approved_by_id").references(() => members.id),
+    publishedAt: timestamp("published_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("changelog_posts_status_idx").on(table.status),
+    index("changelog_posts_version_idx").on(
+      table.versionMajor,
+      table.versionMinor,
+      table.versionPatch
+    ),
+  ]
+);
+
+// One line of a post. Either it came from a bug report (and starts life
+// pre-filled from that report's change notes) or somebody typed it — a
+// custom field. Both end up as editable text, because a release note
+// written for players rarely reads like what a dev wrote for the thread.
+export const changelogEntries = pgTable(
+  "changelog_entries",
+  {
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    postId: text("post_id")
+      .notNull()
+      .references(() => changelogPosts.id, { onDelete: "cascade" }),
+    // ON DELETE SET NULL: deleting a bug report must not silently rewrite
+    // a published release note.
+    bugReportId: text("bug_report_id").references(() => bugReports.id, {
+      onDelete: "set null",
+    }),
+    text: text("text").notNull(),
+    position: integer("position").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [index("changelog_entries_post_id_idx").on(table.postId)]
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {
@@ -501,6 +603,48 @@ export const bugTagGroupsRelations = relations(bugTagGroups, ({ many }) => ({
   tags: many(bugTags),
 }));
 
+export const changelogPostsRelations = relations(
+  changelogPosts,
+  ({ one, many }) => ({
+    createdBy: one(members, {
+      fields: [changelogPosts.createdById],
+      references: [members.id],
+      relationName: "changelogAuthored",
+    }),
+    approvedBy: one(members, {
+      fields: [changelogPosts.approvedById],
+      references: [members.id],
+      relationName: "changelogApproved",
+    }),
+    entries: many(changelogEntries),
+  })
+);
+
+export const changelogEntriesRelations = relations(
+  changelogEntries,
+  ({ one }) => ({
+    post: one(changelogPosts, {
+      fields: [changelogEntries.postId],
+      references: [changelogPosts.id],
+    }),
+    report: one(bugReports, {
+      fields: [changelogEntries.bugReportId],
+      references: [bugReports.id],
+    }),
+  })
+);
+
+export const bugChangesRelations = relations(bugChanges, ({ one }) => ({
+  report: one(bugReports, {
+    fields: [bugChanges.bugReportId],
+    references: [bugReports.id],
+  }),
+  member: one(members, {
+    fields: [bugChanges.memberId],
+    references: [members.id],
+  }),
+}));
+
 export const bugStagesRelations = relations(bugStages, ({ one, many }) => ({
   report: one(bugReports, {
     fields: [bugStages.bugReportId],
@@ -558,6 +702,9 @@ export type BugCategory = typeof bugCategories.$inferSelect;
 export type BugTag = typeof bugTags.$inferSelect;
 export type BugTagGroup = typeof bugTagGroups.$inferSelect;
 export type BugStage = typeof bugStages.$inferSelect;
+export type BugChange = typeof bugChanges.$inferSelect;
+export type ChangelogPost = typeof changelogPosts.$inferSelect;
+export type ChangelogEntry = typeof changelogEntries.$inferSelect;
 export const absencesRelations = relations(absences, ({ one }) => ({
   member: one(members, {
     fields: [absences.memberId],

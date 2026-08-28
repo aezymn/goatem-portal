@@ -79,6 +79,7 @@ export const config = {
     "/absence/:path*",
     "/testing/:path*",
     "/members/:path*",
+    "/changelog/:path*",
     "/link-roblox",
   ],
 };

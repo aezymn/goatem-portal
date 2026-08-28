@@ -70,6 +70,9 @@ export const RANK_ACTIONS = [
   "reports.delete",
   "roster.manage",
   "bugsetup.manage",
+  "changelog.view",
+  "changelog.write",
+  "changelog.approve",
 ] as const;
 
 export type RankAction = (typeof RANK_ACTIONS)[number];

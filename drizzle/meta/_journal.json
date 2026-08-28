@@ -92,6 +92,13 @@
       "when": 1787942626169,
       "tag": "0012_replies_locking_and_archive",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1787945166884,
+      "tag": "0013_changelog",
+      "breakpoints": true
     }
   ]
 }

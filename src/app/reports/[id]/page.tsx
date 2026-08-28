@@ -23,6 +23,8 @@ import { ReportThread } from "@/components/ReportThread";
 import { ParticipantsPanel } from "@/components/ParticipantsPanel";
 import { ReportActions } from "@/components/ReportActions";
 import { ArchiveButton } from "@/components/ArchiveButton";
+import { ChangeNotePrompt } from "@/components/ChangeNotePrompt";
+import { changeNotesFor, getChangeNote } from "@/lib/changelog";
 
 export const dynamic = "force-dynamic";
 
@@ -94,15 +96,28 @@ export default async function ReportDetailPage({
     getReportVersion(id),
   ]);
 
+  // Only asked once the bug is closed, and only of the people who worked
+  // it — the reporter and whoever joined. Anyone else passing by has
+  // nothing to record.
+  const locked = report.completedAt !== null;
+  const onIt = participants.some((p) => p.memberId === me?.id);
+  const shouldAskForChanges =
+    locked && Boolean(me) && (onIt || report.reporterId === me?.id);
+
+  const [myNote, allNotes] = shouldAskForChanges
+    ? await Promise.all([
+        getChangeNote(id, me!.id),
+        changeNotesFor([id]),
+      ])
+    : [null, new Map<string, { author: string; body: string }[]>()];
+
   const tags = tagsByReport.get(id) ?? [];
   const canTriage = live?.user ? hasAction(live.user, "reports.triage") : false;
   const canDelete = live?.user ? hasAction(live.user, "reports.delete") : false;
   const isAdmin = live?.user ? isFullAdmin(live.user) : false;
-  const locked = report.completedAt !== null;
 
   // A stage is a claim about where the work has got to, so it comes from
   // someone doing the work: whoever joined, whoever filed it, or an admin.
-  const onIt = participants.some((p) => p.memberId === me?.id);
   const canAddStage = Boolean(
     me && (isAdmin || onIt || report.reporterId === me.id)
   );
@@ -178,6 +193,16 @@ export default async function ReportDetailPage({
 
       {/* The thread takes the width it needs; the member list sits beside
           it on desktop and drops below on narrow screens. */}
+      {shouldAskForChanges && (
+        <ChangeNotePrompt
+          reportId={report.id}
+          existing={myNote}
+          otherNotes={(allNotes.get(report.id) ?? []).filter(
+            (n) => n.body !== myNote
+          )}
+        />
+      )}
+
       <div className="flex flex-col gap-5 md:flex-row md:items-start">
         <div className="min-w-0 flex-1">
           <ReportThread
