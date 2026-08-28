@@ -24,7 +24,16 @@ const securityHeaders = [
       // and there's a real deployment to test it against.
       "script-src 'self' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: https://cdn.discordapp.com",
+      // Attachments are arbitrary links people paste (a screenshot on
+      // imgur, a clip host), so images and media can't be host-limited
+      // the way the Discord CDN was — https: only is the meaningful
+      // restriction left, and it still blocks data:/blob: injection.
+      "img-src 'self' data: https:",
+      "media-src 'self' https:",
+      // Only the players src/lib/attachments.ts actually produces embed
+      // URLs for. Keep this list and EMBED_FRAME_HOSTS in step: if they
+      // disagree the CSP wins and the embed silently renders nothing.
+      "frame-src https://medal.tv https://www.youtube-nocookie.com https://streamable.com",
       "connect-src 'self' https://discord.com",
       "frame-ancestors 'none'",
       "base-uri 'self'",

@@ -1,23 +1,81 @@
 import { z } from "zod";
 import { RANK_ACTIONS } from "@/lib/permissions";
+import { TAG_TONES } from "@/lib/tagTones";
+import { isValidAttachmentUrl } from "@/lib/attachments";
 
 // Every field a person can type into has a length cap — not just to keep
 // the database tidy, but as a basic defense against someone trying to
 // stuff huge payloads through the API directly (bypassing the UI, which
 // obviously can't be relied on to enforce anything).
 
+// Attachments are links the portal embeds, never files it stores. The
+// count and length caps are the same idea as every other cap here: the
+// API has to hold on its own, whatever the form does.
+const attachmentUrl = z
+  .string()
+  .trim()
+  .max(2000)
+  .refine(isValidAttachmentUrl, "Attachments must be http(s) links");
+
+const attachments = z.array(attachmentUrl).max(8).optional();
+
 export const createReportSchema = z.object({
   title: z.string().trim().min(3).max(200),
   description: z.string().trim().min(1).max(5000),
+  categoryId: z.string().trim().max(64).nullable().optional(),
+  tagIds: z.array(z.string().trim().max(64)).max(20).optional(),
+  attachments,
 });
 
-export const updateReportSchema = z.object({
-  status: z.enum(["OPEN", "IN_PROGRESS", "RESOLVED"]).optional(),
-  assigneeId: z.string().max(64).nullable().optional(),
-});
+// Status and assignee are both gone — state lives in tags now, and
+// nobody is assigned a bug, they join it.
+export const updateReportSchema = z
+  .object({
+    title: z.string().trim().min(3).max(200).optional(),
+    categoryId: z.string().trim().max(64).nullable().optional(),
+    tagIds: z.array(z.string().trim().max(64)).max(20).optional(),
+  })
+  .refine(
+    (d) =>
+      d.title !== undefined ||
+      d.categoryId !== undefined ||
+      d.tagIds !== undefined,
+    { message: "Nothing to update" }
+  );
 
 export const createCommentSchema = z.object({
-  body: z.string().trim().min(1).max(2000),
+  // A comment may be nothing but an attachment — posting a clip with no
+  // words is a perfectly good contribution to the thread.
+  body: z.string().trim().max(2000).optional().default(""),
+  attachments,
+}).refine((d) => d.body.length > 0 || (d.attachments?.length ?? 0) > 0, {
+  message: "Write something or attach a link",
+});
+
+export const createCategorySchema = z.object({
+  name: z.string().trim().min(1, "Give the category a name").max(60),
+});
+
+export const updateCategorySchema = z.object({
+  name: z.string().trim().min(1, "Give the category a name").max(60),
+});
+
+export const createTagSchema = z.object({
+  name: z.string().trim().min(1, "Give the tag a name").max(40),
+  tone: z.enum([...TAG_TONES] as [string, ...string[]]).optional(),
+});
+
+export const updateTagSchema = z
+  .object({
+    name: z.string().trim().min(1).max(40).optional(),
+    tone: z.enum([...TAG_TONES] as [string, ...string[]]).optional(),
+  })
+  .refine((d) => d.name !== undefined || d.tone !== undefined, {
+    message: "Nothing to update",
+  });
+
+export const reorderTaxonomySchema = z.object({
+  order: z.array(z.string().trim().min(1).max(64)).min(1).max(200),
 });
 
 export const createMemberSchema = z.object({

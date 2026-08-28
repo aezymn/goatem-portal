@@ -27,11 +27,11 @@ import {
 import { relations } from "drizzle-orm";
 import { createId } from "@paralleldrive/cuid2";
 
-export const reportStatusEnum = pgEnum("report_status", [
-  "OPEN",
-  "IN_PROGRESS",
-  "RESOLVED",
-]);
+// Bug reports used to carry a fixed status enum. It's gone: "in progress"
+// and "complete" turned out to be the same kind of thing as "high
+// priority", so both live in bugTags now and there's one control instead
+// of two competing ones. See drizzle/0009 for the migration that moved
+// existing statuses across.
 
 // The rank ladder. `position` is the authority order an admin sets by
 // dragging ranks around on the Ranks page (lower number = higher
@@ -170,17 +170,61 @@ export const members = pgTable(
   ]
 );
 
+// Which release or phase a bug belongs to — "Pre-launch", "Update v1.01".
+// One per report, ordered by `position` the way ranks are, and managed by
+// admins so the list doesn't sprawl into near-duplicates.
+export const bugCategories = pgTable("bug_categories", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  name: text("name").notNull().unique(),
+  position: integer("position").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
+// Free-form labels: workflow state ("In progress", "Complete") and
+// priority ("High priority") are the same kind of thing, so they share
+// one system rather than a status column competing with a tag list.
+// `tone` names a colour from a fixed palette (src/lib/bugTaxonomy.ts)
+// rather than storing a raw hex, so tags can never drift out of the
+// design system or land unreadable in one of the two themes.
+export const bugTags = pgTable("bug_tags", {
+  id: text("id").primaryKey().$defaultFn(() => createId()),
+  name: text("name").notNull().unique(),
+  tone: text("tone").notNull().default("zinc"),
+  position: integer("position").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true })
+    .notNull()
+    .defaultNow(),
+});
+
 export const bugReports = pgTable(
   "bug_reports",
   {
     id: text("id").primaryKey().$defaultFn(() => createId()),
     title: text("title").notNull(),
     description: text("description").notNull(),
-    status: reportStatusEnum("status").notNull().default("OPEN"),
     reporterId: text("reporter_id")
       .notNull()
       .references(() => members.id),
-    assigneeId: text("assignee_id").references(() => members.id),
+    // Which release or phase this bug belongs to ("Pre-launch",
+    // "Update v1.01"). Nullable, and ON DELETE SET NULL: retiring a
+    // category should never take reports down with it.
+    categoryId: text("category_id").references(
+      (): AnyPgColumn => bugCategories.id,
+      { onDelete: "set null" }
+    ),
+    // Attachment URLs, in the order they were added. Links only — the
+    // portal never hosts the media, it embeds it (Medal clips, YouTube,
+    // images). A plain array is enough because nothing ever queries
+    // across attachments; they're only ever read alongside their report.
+    attachments: jsonb("attachments").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -190,7 +234,7 @@ export const bugReports = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (table) => [
-    index("bug_reports_status_idx").on(table.status),
+    index("bug_reports_category_id_idx").on(table.categoryId),
     index("bug_reports_deleted_at_idx").on(table.deletedAt),
   ]
 );
@@ -206,6 +250,7 @@ export const comments = pgTable(
     authorId: text("author_id")
       .notNull()
       .references(() => members.id),
+    attachments: jsonb("attachments").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -216,6 +261,49 @@ export const comments = pgTable(
 
 // Append-only. No code path in this app updates or deletes rows here —
 // that's the whole point. See src/lib/audit.ts.
+// Many-to-many, hard-deleted on purpose: unapplying a tag is not the
+// kind of event the soft-delete rule exists to protect, and keeping
+// tombstones here would make "which tags does this report have" a
+// filtered query for no benefit. The audit log records the change.
+export const bugReportTags = pgTable(
+  "bug_report_tags",
+  {
+    bugReportId: text("bug_report_id")
+      .notNull()
+      .references(() => bugReports.id, { onDelete: "cascade" }),
+    tagId: text("tag_id")
+      .notNull()
+      .references(() => bugTags.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    primaryKey({ columns: [table.bugReportId, table.tagId] }),
+    index("bug_report_tags_tag_id_idx").on(table.tagId),
+  ]
+);
+
+// Who is working on a report. Replaces the old single assignee: people
+// join a report themselves and appear in its member list, the way a
+// Discord channel shows who's in it, rather than being handed the bug by
+// someone else.
+export const bugParticipants = pgTable(
+  "bug_participants",
+  {
+    bugReportId: text("bug_report_id")
+      .notNull()
+      .references(() => bugReports.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "cascade" }),
+    joinedAt: timestamp("joined_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.bugReportId, table.memberId] }),
+    index("bug_participants_member_id_idx").on(table.memberId),
+  ]
+);
+
 export const auditLog = pgTable(
   "audit_log",
   {
@@ -289,7 +377,7 @@ export const testLogs = pgTable(
 
 export const membersRelations = relations(members, ({ one, many }) => ({
   reportsFiled: many(bugReports, { relationName: "reportsFiled" }),
-  reportsAssigned: many(bugReports, { relationName: "reportsAssigned" }),
+  joinedReports: many(bugParticipants),
   comments: many(comments),
   absences: many(absences),
   testLogs: many(testLogs),
@@ -307,12 +395,43 @@ export const bugReportsRelations = relations(bugReports, ({ one, many }) => ({
     references: [members.id],
     relationName: "reportsFiled",
   }),
-  assignee: one(members, {
-    fields: [bugReports.assigneeId],
-    references: [members.id],
-    relationName: "reportsAssigned",
+  category: one(bugCategories, {
+    fields: [bugReports.categoryId],
+    references: [bugCategories.id],
   }),
   comments: many(comments),
+  tags: many(bugReportTags),
+  participants: many(bugParticipants),
+}));
+
+export const bugCategoriesRelations = relations(bugCategories, ({ many }) => ({
+  reports: many(bugReports),
+}));
+
+export const bugTagsRelations = relations(bugTags, ({ many }) => ({
+  reports: many(bugReportTags),
+}));
+
+export const bugReportTagsRelations = relations(bugReportTags, ({ one }) => ({
+  report: one(bugReports, {
+    fields: [bugReportTags.bugReportId],
+    references: [bugReports.id],
+  }),
+  tag: one(bugTags, {
+    fields: [bugReportTags.tagId],
+    references: [bugTags.id],
+  }),
+}));
+
+export const bugParticipantsRelations = relations(bugParticipants, ({ one }) => ({
+  report: one(bugReports, {
+    fields: [bugParticipants.bugReportId],
+    references: [bugReports.id],
+  }),
+  member: one(members, {
+    fields: [bugParticipants.memberId],
+    references: [members.id],
+  }),
 }));
 
 export const commentsRelations = relations(comments, ({ one }) => ({
@@ -334,6 +453,8 @@ export type BugReport = typeof bugReports.$inferSelect;
 export type NewBugReport = typeof bugReports.$inferInsert;
 export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
+export type BugCategory = typeof bugCategories.$inferSelect;
+export type BugTag = typeof bugTags.$inferSelect;
 export const absencesRelations = relations(absences, ({ one }) => ({
   member: one(members, {
     fields: [absences.memberId],

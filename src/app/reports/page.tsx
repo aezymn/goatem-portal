@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { db } from "@/db";
-import { bugReports, members } from "@/db/schema";
-import { desc, eq, isNull } from "drizzle-orm";
-import { StatusBadge } from "@/components/StatusBadge";
+import { bugCategories, bugReports, members } from "@/db/schema";
+import { asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { tagsForReports } from "@/lib/bugTaxonomy";
+import { TagChip } from "@/components/TagChip";
 
 // This page reads straight from the database (not via fetch()), which
 // Next's static-vs-dynamic heuristics don't automatically detect — without
@@ -21,21 +22,52 @@ export default async function ReportsPage() {
     .select({
       id: bugReports.id,
       title: bugReports.title,
-      status: bugReports.status,
       createdAt: bugReports.createdAt,
       reporterUsername: members.robloxUsername,
+      categoryId: bugReports.categoryId,
+      categoryName: bugCategories.name,
+      categoryPosition: bugCategories.position,
+      // Aliased and fully qualified on purpose — see the note in
+      // src/lib/bugTaxonomy.ts about drizzle emitting bare column names
+      // inside sql`` templates. This query happens to have joins (which
+      // makes drizzle qualify them), but depending on that is how the
+      // category counts silently read zero.
+      replyCount: sql<number>`(
+        select count(*)::int from "comments" c
+        where c."bug_report_id" = "bug_reports"."id"
+          and c."deleted_at" is null
+      )`,
+      participantCount: sql<number>`(
+        select count(*)::int from "bug_participants" bp
+        where bp."bug_report_id" = "bug_reports"."id"
+      )`,
     })
     .from(bugReports)
     .innerJoin(members, eq(bugReports.reporterId, members.id))
+    .leftJoin(bugCategories, eq(bugReports.categoryId, bugCategories.id))
     .where(isNull(bugReports.deletedAt))
-    .orderBy(desc(bugReports.createdAt));
+    .orderBy(asc(bugCategories.position), desc(bugReports.createdAt));
+
+  const tags = await tagsForReports(rows.map((r) => r.id));
+
+  // Grouped by category in the order an admin arranged them, with
+  // uncategorised reports last — they're the ones needing attention, not
+  // the ones to lead with.
+  const groups = new Map<string, typeof rows>();
+  for (const row of rows) {
+    const key = row.categoryName ?? "";
+    groups.set(key, [...(groups.get(key) ?? []), row]);
+  }
+  const ordered = [...groups.entries()].sort(([a], [b]) => {
+    if (a === "") return 1;
+    if (b === "") return -1;
+    return 0;
+  });
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">
-          Bug Reports
-        </h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Bug Reports</h1>
         <Link
           href="/reports/new"
           className="rounded-md bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
@@ -46,28 +78,52 @@ export default async function ReportsPage() {
 
       {rows.length === 0 ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          No open reports. Nice.
+          No reports yet. Nice.
         </p>
       ) : (
-        <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-          {rows.map((report) => (
-            <li key={report.id}>
-              <Link
-                href={`/reports/${report.id}`}
-                className="flex items-center justify-between gap-4 px-4 py-3 hover:bg-zinc-100 dark:hover:bg-zinc-900"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium">{report.title}</p>
-                  <p className="text-xs text-zinc-500">
-                    filed by {report.reporterUsername} ·{" "}
-                    {report.createdAt.toLocaleDateString()}
-                  </p>
-                </div>
-                <StatusBadge status={report.status} />
-              </Link>
-            </li>
-          ))}
-        </ul>
+        ordered.map(([category, reports]) => (
+          <section key={category || "uncategorised"} className="flex flex-col gap-2">
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+              {category || "Uncategorised"}
+              <span className="ml-2 font-normal normal-case">
+                {reports.length}
+              </span>
+            </h2>
+
+            <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 dark:divide-zinc-900 dark:border-zinc-800">
+              {reports.map((report) => (
+                <li key={report.id}>
+                  <Link
+                    href={`/reports/${report.id}`}
+                    className="flex flex-wrap items-center gap-x-3 gap-y-1.5 px-4 py-3 transition hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                  >
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">
+                        {report.title}
+                      </span>
+                      <span className="text-xs text-zinc-500">
+                        {report.reporterUsername ?? "someone"} ·{" "}
+                        {report.createdAt.toLocaleDateString()}
+                        {report.replyCount > 0 &&
+                          ` · ${report.replyCount} ${
+                            report.replyCount === 1 ? "reply" : "replies"
+                          }`}
+                        {report.participantCount > 0 &&
+                          ` · ${report.participantCount} on it`}
+                      </span>
+                    </span>
+
+                    <span className="flex shrink-0 flex-wrap justify-end gap-1.5">
+                      {(tags.get(report.id) ?? []).map((t) => (
+                        <TagChip key={t.id} tag={t} />
+                      ))}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        ))
       )}
     </div>
   );

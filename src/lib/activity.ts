@@ -57,7 +57,6 @@ export async function getMemberActivity(memberId: string, limit = 20) {
       .select({
         id: bugReports.id,
         title: bugReports.title,
-        status: bugReports.status,
         createdAt: bugReports.createdAt,
       })
       .from(bugReports)

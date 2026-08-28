@@ -1,14 +1,17 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { bugReports, comments, members } from "@/db/schema";
-import { and, asc, eq, isNull } from "drizzle-orm";
-import { alias } from "drizzle-orm/pg-core";
+import { bugReports, members } from "@/db/schema";
+import { and, eq, isNull } from "drizzle-orm";
 import { requireRosterMember, requireAction } from "@/lib/requireSession";
 import { updateReportSchema } from "@/lib/validation";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
-
-const assignee = alias(members, "assignee");
+import {
+  categoryExists,
+  setReportTags,
+  tagsForReports,
+} from "@/lib/bugTaxonomy";
+import { getReportParticipants, getReportTimeline } from "@/lib/reports";
 
 export async function GET(
   _request: Request,
@@ -23,16 +26,15 @@ export async function GET(
       id: bugReports.id,
       title: bugReports.title,
       description: bugReports.description,
-      status: bugReports.status,
+      categoryId: bugReports.categoryId,
+      attachments: bugReports.attachments,
       createdAt: bugReports.createdAt,
       updatedAt: bugReports.updatedAt,
+      reporterId: bugReports.reporterId,
       reporterUsername: members.robloxUsername,
-      assigneeId: bugReports.assigneeId,
-      assigneeUsername: assignee.robloxUsername,
     })
     .from(bugReports)
     .innerJoin(members, eq(bugReports.reporterId, members.id))
-    .leftJoin(assignee, eq(bugReports.assigneeId, assignee.id))
     .where(and(eq(bugReports.id, id), isNull(bugReports.deletedAt)))
     .limit(1);
 
@@ -40,23 +42,22 @@ export async function GET(
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
 
-  const reportComments = await db
-    .select({
-      id: comments.id,
-      body: comments.body,
-      createdAt: comments.createdAt,
-      authorUsername: members.robloxUsername,
-    })
-    .from(comments)
-    .innerJoin(members, eq(comments.authorId, members.id))
-    .where(and(eq(comments.bugReportId, id), isNull(comments.deletedAt)))
-    .orderBy(asc(comments.createdAt));
+  const [tags, timeline, participants] = await Promise.all([
+    tagsForReports([id]),
+    getReportTimeline(id),
+    getReportParticipants(id, report.reporterId),
+  ]);
 
-  return NextResponse.json({ report, comments: reportComments });
+  return NextResponse.json({
+    report: { ...report, tags: tags.get(id) ?? [] },
+    timeline,
+    participants,
+  });
 }
 
-// Status/assignee changes need the reports.triage action — filing and
-// commenting are open to any roster member, but triaging isn't.
+// Retitling, recategorising and retagging all need reports.triage.
+// Filing, commenting and joining are open to any roster member; deciding
+// what a bug IS isn't.
 export async function PATCH(
   request: Request,
   ctx: RouteContext<"/api/reports/[id]">
@@ -81,14 +82,15 @@ export async function PATCH(
       { status: 400 }
     );
   }
-  if (
-    parsed.data.status === undefined &&
-    parsed.data.assigneeId === undefined
-  ) {
-    return NextResponse.json(
-      { error: "Nothing to update" },
-      { status: 400 }
-    );
+
+  const { title, categoryId, tagIds } = parsed.data;
+
+  // null clears the category; an unknown id is treated as clearing it too
+  // rather than 400ing, so a stale dropdown can't block a legitimate edit.
+  let nextCategoryId: string | null | undefined;
+  if (categoryId !== undefined) {
+    nextCategoryId =
+      categoryId && (await categoryExists(categoryId)) ? categoryId : null;
   }
 
   const updated = await db.transaction(async (tx) => {
@@ -102,11 +104,9 @@ export async function PATCH(
     const [row] = await tx
       .update(bugReports)
       .set({
-        ...(parsed.data.status !== undefined
-          ? { status: parsed.data.status }
-          : {}),
-        ...(parsed.data.assigneeId !== undefined
-          ? { assigneeId: parsed.data.assigneeId }
+        ...(title !== undefined ? { title } : {}),
+        ...(nextCategoryId !== undefined
+          ? { categoryId: nextCategoryId }
           : {}),
         updatedAt: new Date(),
       })
@@ -120,8 +120,8 @@ export async function PATCH(
       targetType: "bug_report",
       targetId: id,
       metadata: {
-        before: { status: existing.status, assigneeId: existing.assigneeId },
-        after: parsed.data,
+        before: { title: existing.title, categoryId: existing.categoryId },
+        after: { title, categoryId: nextCategoryId, tagIds },
       },
     });
 
@@ -131,6 +131,9 @@ export async function PATCH(
   if (!updated) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+
+  if (tagIds !== undefined) await setReportTags(id, tagIds);
+
   return NextResponse.json({ report: updated });
 }
 

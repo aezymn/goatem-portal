@@ -10,7 +10,6 @@ import {
 import { isCreatorDiscordId } from "@/lib/permissions";
 import { asRegion } from "@/lib/regions";
 import { presenceFor } from "@/lib/presence";
-import { StatusBadge } from "@/components/StatusBadge";
 import { YesNoUnknown } from "@/components/RosterStatusCell";
 
 export const dynamic = "force-dynamic";
@@ -186,7 +185,6 @@ export default async function MemberProfilePage({
           <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
             {activity.bugs.map((b) => (
               <li key={b.id} className="flex items-center gap-3 px-4 py-2.5">
-                <StatusBadge status={b.status} />
                 <Link
                   href={`/reports/${b.id}`}
                   className="min-w-0 flex-1 truncate text-sm hover:underline"

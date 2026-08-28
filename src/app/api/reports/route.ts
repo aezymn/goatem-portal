@@ -7,6 +7,8 @@ import { createReportSchema } from "@/lib/validation";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { categoryExists, setReportTags, tagsForReports } from "@/lib/bugTaxonomy";
+import { joinReport } from "@/lib/reports";
 
 export async function GET() {
   const auth = await requireRosterMember();
@@ -16,7 +18,7 @@ export async function GET() {
     .select({
       id: bugReports.id,
       title: bugReports.title,
-      status: bugReports.status,
+      categoryId: bugReports.categoryId,
       createdAt: bugReports.createdAt,
       updatedAt: bugReports.updatedAt,
       reporterUsername: members.robloxUsername,
@@ -26,7 +28,10 @@ export async function GET() {
     .where(isNull(bugReports.deletedAt))
     .orderBy(desc(bugReports.createdAt));
 
-  return NextResponse.json({ reports: rows });
+  const tags = await tagsForReports(rows.map((r) => r.id));
+  return NextResponse.json({
+    reports: rows.map((r) => ({ ...r, tags: tags.get(r.id) ?? [] })),
+  });
 }
 
 export async function POST(request: Request) {
@@ -60,6 +65,14 @@ export async function POST(request: Request) {
     );
   }
 
+  // An unknown category is dropped rather than rejected: the report
+  // itself is the thing worth saving, and landing it uncategorised beats
+  // losing someone's write-up to a stale dropdown.
+  const categoryId =
+    parsed.data.categoryId && (await categoryExists(parsed.data.categoryId))
+      ? parsed.data.categoryId
+      : null;
+
   const report = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(bugReports)
@@ -67,6 +80,8 @@ export async function POST(request: Request) {
         title: parsed.data.title,
         description: parsed.data.description,
         reporterId: reporterMember.id,
+        categoryId,
+        attachments: parsed.data.attachments ?? [],
       })
       .returning();
 
@@ -81,6 +96,13 @@ export async function POST(request: Request) {
 
     return created;
   });
+
+  // Filing a bug puts you on it — you don't then have to join your own
+  // report to appear in its member list.
+  await joinReport(report.id, reporterMember.id);
+  if (parsed.data.tagIds?.length) {
+    await setReportTags(report.id, parsed.data.tagIds);
+  }
 
   return NextResponse.json({ report }, { status: 201 });
 }

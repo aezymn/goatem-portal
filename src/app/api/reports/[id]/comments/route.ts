@@ -7,6 +7,7 @@ import { createCommentSchema } from "@/lib/validation";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import { checkRateLimit } from "@/lib/rateLimit";
+import { joinReport } from "@/lib/reports";
 
 export async function POST(
   request: Request,
@@ -54,6 +55,7 @@ export async function POST(
         body: parsed.data.body,
         bugReportId: id,
         authorId: author.id,
+        attachments: parsed.data.attachments ?? [],
       })
       .returning();
 
@@ -72,5 +74,10 @@ export async function POST(
   if (!result) {
     return NextResponse.json({ error: "report not found" }, { status: 404 });
   }
+
+  // Saying something about a bug puts you on it. Idempotent, so this is
+  // just "make sure they're listed" rather than a second join.
+  await joinReport(id, author.id);
+
   return NextResponse.json({ comment: result }, { status: 201 });
 }
