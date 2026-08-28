@@ -4,7 +4,6 @@ import { RanksBoard } from "@/components/RanksBoard";
 
 // Direct DB/bot reads aren't auto-detected as dynamic — force it, same as
 // every other data-driven page in this app.
-export const dynamic = "force-dynamic";
 
 export default async function RanksPage() {
   const [ranks, discordRoles] = await Promise.all([

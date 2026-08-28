@@ -5,7 +5,6 @@ import { hasAction } from "@/lib/permissions";
 import { getPost, listEntries, unloggedCompletedReports } from "@/lib/changelog";
 import { ChangelogPostEditor } from "@/components/ChangelogPostEditor";
 
-export const dynamic = "force-dynamic";
 
 export default async function EditChangelogPostPage({
   params,

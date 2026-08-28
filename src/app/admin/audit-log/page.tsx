@@ -5,7 +5,6 @@ import Link from "next/link";
 
 // Direct DB reads (not fetch()) aren't auto-detected as dynamic — force it
 // so this never gets frozen at build time. See src/app/reports/page.tsx.
-export const dynamic = "force-dynamic";
 
 // src/proxy.ts already redirects non-admins away from anything under
 // /admin before this ever renders, but note that page gate is a UX

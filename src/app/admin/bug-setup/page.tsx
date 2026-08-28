@@ -9,7 +9,6 @@ import {
 } from "@/lib/bugTaxonomy";
 import { BugTaxonomyBoard } from "@/components/BugTaxonomyBoard";
 
-export const dynamic = "force-dynamic";
 
 export default async function BugSetupPage() {
   // Managing these is a rank-grantable action now, not admin-only — so

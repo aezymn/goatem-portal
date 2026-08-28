@@ -12,7 +12,6 @@ import { asRegion } from "@/lib/regions";
 import { presenceFor } from "@/lib/presence";
 import { YesNoUnknown } from "@/components/RosterStatusCell";
 
-export const dynamic = "force-dynamic";
 
 function shortDate(d: string | Date) {
   const date = typeof d === "string" ? new Date(`${d}T00:00:00`) : d;

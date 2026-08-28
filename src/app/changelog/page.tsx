@@ -5,7 +5,6 @@ import { authOptions } from "@/lib/auth";
 import { hasAction } from "@/lib/permissions";
 import { listEntries, listPosts } from "@/lib/changelog";
 
-export const dynamic = "force-dynamic";
 
 /**
  * The master change log: everything that has shipped, newest first.

@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 
 // Explicit rather than relying on getServerSession's cookie read to be
 // inferred as dynamic — see src/app/reports/page.tsx for why this matters.
-export const dynamic = "force-dynamic";
 
 export default async function Home() {
   const session = await getServerSession(authOptions);

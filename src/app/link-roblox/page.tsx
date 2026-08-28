@@ -4,7 +4,6 @@ import { authOptions } from "@/lib/auth";
 import { getMemberByDiscordId } from "@/lib/members";
 import { LinkRobloxGate, AlreadyLinked } from "@/components/LinkRobloxGate";
 
-export const dynamic = "force-dynamic";
 
 /**
  * The one thing the portal insists on before anything else.

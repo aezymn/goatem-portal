@@ -7,7 +7,6 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { isCreatorDiscordId } from "@/lib/permissions";
 import { AdminsPanel } from "@/components/AdminsPanel";
 
-export const dynamic = "force-dynamic";
 
 // src/proxy.ts already keeps everyone but the CREATOR off this page —
 // this is a second, defense-in-depth check, and it matters more than a

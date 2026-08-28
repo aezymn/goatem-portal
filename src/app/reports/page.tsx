@@ -16,7 +16,6 @@ import { ReportFilters } from "@/components/ReportFilters";
 // this, the report list would get frozen at build time instead of
 // reflecting live data on every request. Found by actually running a
 // production build, not assumed.
-export const dynamic = "force-dynamic";
 
 export default async function ReportsPage({
   searchParams,

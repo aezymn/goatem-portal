@@ -7,7 +7,6 @@ import { AbsenceForm } from "@/components/AbsenceForm";
 import { DeleteEntryButton } from "@/components/DeleteEntryButton";
 import { PersonLink } from "@/components/PersonLink";
 
-export const dynamic = "force-dynamic";
 
 function formatRange(leave: string, back: string) {
   const fmt = (d: string) =>

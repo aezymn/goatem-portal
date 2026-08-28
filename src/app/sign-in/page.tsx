@@ -3,7 +3,6 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { SignInForm } from "@/components/SignInForm";
 
-export const dynamic = "force-dynamic";
 
 /**
  * Checks for an existing session BEFORE rendering anything.

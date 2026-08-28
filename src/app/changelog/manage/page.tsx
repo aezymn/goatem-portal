@@ -9,7 +9,6 @@ import {
 } from "@/lib/changelog";
 import { ChangelogManager } from "@/components/ChangelogManager";
 
-export const dynamic = "force-dynamic";
 
 /**
  * Where posts get written, edited and approved — the working side of the

@@ -7,7 +7,6 @@ import { TestLogForm } from "@/components/TestLogForm";
 import { DeleteEntryButton } from "@/components/DeleteEntryButton";
 import { PersonLink } from "@/components/PersonLink";
 
-export const dynamic = "force-dynamic";
 
 export function formatMinutes(mins: number | null) {
   if (!mins) return null;

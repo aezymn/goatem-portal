@@ -26,7 +26,6 @@ import { ArchiveButton } from "@/components/ArchiveButton";
 import { ChangeNotePrompt } from "@/components/ChangeNotePrompt";
 import { changeNotesFor, getChangeNote } from "@/lib/changelog";
 
-export const dynamic = "force-dynamic";
 
 export default async function ReportDetailPage({
   params,
