@@ -103,6 +103,24 @@ export async function getMemberTotals(memberId: string) {
   };
 }
 
+/** The alt/testing accounts belonging to someone. Alts have no profile
+ * page of their own — they're listed on their owner's, which is the only
+ * place the whole person is visible at once. */
+export async function getAltAccounts(memberId: string) {
+  return db
+    .select({
+      id: members.id,
+      robloxUsername: members.robloxUsername,
+      robloxUserId: members.robloxUserId,
+      hasGameAccess: members.hasGameAccess,
+    })
+    .from(members)
+    .where(
+      and(eq(members.parentMemberId, memberId), isNull(members.deletedAt))
+    )
+    .orderBy(members.robloxUsername);
+}
+
 /** A roster row plus the display fields the profile page needs. */
 export async function getMemberById(id: string) {
   const [row] = await db

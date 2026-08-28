@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { DiscordNameCell } from "@/components/DiscordNameCell";
-import { YesNoUnknown, NotApplicable } from "@/components/RosterStatusCell";
+import { YesNoUnknown } from "@/components/RosterStatusCell";
 import { PresenceCell, useNow } from "@/components/PresenceCell";
 import { DeleteMemberButton } from "@/components/DeleteMemberButton";
 import type { Region } from "@/lib/regions";
@@ -28,6 +28,9 @@ export interface RosterMember {
   isPortalAdmin: boolean;
   isCreator: boolean;
   isAlt: boolean;
+  /** Set on alts, pointing at the owner's row. Alts have no profile page
+   * of their own — they're listed on their owner's. */
+  parentMemberId: string | null;
 }
 
 export interface RosterGroup {
@@ -77,8 +80,6 @@ export function RosterGroups({
       {groups.map((group) => {
         const isCollapsed = collapsed.has(group.rank);
         const people = group.members.filter((m) => !m.isAlt);
-        const linked = group.members.filter((m) => m.robloxUsername).length;
-        const allLinked = linked === group.members.length;
 
         return (
           <section
@@ -113,31 +114,6 @@ export function RosterGroups({
                 {people.length}
               </span>
 
-              <span
-                className={`text-xs tabular-nums ${
-                  allLinked
-                    ? "text-emerald-600 dark:text-emerald-500"
-                    : "text-zinc-400"
-                }`}
-              >
-                {linked}/{group.members.length} linked
-              </span>
-
-              {/* The two status columns had no labels at all once the
-                  roster stopped being a <table> — the pills just floated
-                  at the right edge with nothing saying what they meant.
-                  Repeating the headings per group also means they're
-                  still on screen when you're scrolled deep into the
-                  roster. Widths are kept in step with the row below. */}
-              <span className="ml-auto hidden shrink-0 items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:flex dark:text-zinc-600">
-                <span className="flex w-[112px] justify-end">
-                  Game access
-                </span>
-                <span className="flex w-[128px] justify-end">
-                  Last active
-                </span>
-                {canManage && <span aria-hidden className="w-7" />}
-              </span>
             </button>
 
             {!isCollapsed && (
@@ -169,7 +145,7 @@ export function RosterGroups({
                             link even when no Roblox account is linked yet,
                             since the profile is still worth reaching. */}
                         <Link
-                          href={`/members/${m.id}`}
+                          href={`/members/${m.parentMemberId ?? m.id}`}
                           className={`truncate hover:underline ${
                             m.robloxUsername
                               ? "text-sm font-medium"
@@ -209,29 +185,26 @@ export function RosterGroups({
                       )}
                     </div>
 
-                    {/* Fixed-width slots so the pills form tidy columns
-                        down the list instead of jittering with their own
-                        label lengths. */}
+                    {/* Status capsules ride the right edge at their own
+                        width rather than sitting in fixed columns — with
+                        most rows showing nothing for one or both, reserved
+                        columns were mostly reserving empty space. */}
                     <div className="ml-auto flex shrink-0 items-center gap-2">
-                      <span className="hidden w-[112px] justify-end sm:flex">
-                        {m.robloxUsername ? (
+                      {m.robloxUsername && (
+                        <span className="hidden sm:flex">
                           <YesNoUnknown
                             value={m.hasGameAccess}
                             yes="In group"
                             no="Not in group"
                             unknown="Unchecked"
                           />
-                        ) : (
-                          <NotApplicable title="No Roblox account linked yet, so there's nothing to check" />
-                        )}
-                      </span>
-                      <span className="hidden w-[128px] justify-end sm:flex">
-                        {m.isAlt ? (
-                          <NotApplicable title="Alt accounts don't sign in — the person who owns this one does" />
-                        ) : (
+                        </span>
+                      )}
+                      {!m.isAlt && (
+                        <span className="hidden sm:flex">
                           <PresenceCell member={m} now={now} />
-                        )}
-                      </span>
+                        </span>
+                      )}
                       {canManage && (
                         <DeleteMemberButton
                           memberId={m.id}

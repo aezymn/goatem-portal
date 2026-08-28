@@ -71,6 +71,7 @@ export default async function RosterPage() {
       isPortalAdmin: m.isPortalAdmin,
       isCreator: isCreatorDiscordId(m.discordId ?? undefined),
       isAlt: Boolean(m.parentMemberId),
+      parentMemberId: m.parentMemberId,
       region: asRegion(m.region),
       // An alt is the same human as its owner, so the absence tag goes on
       // the owner's row only rather than repeating down the group.
@@ -104,22 +105,10 @@ export default async function RosterPage() {
     : undefined;
   const myAlts = me ? (altsByOwner.get(me.id) ?? []) : [];
 
-  const total = rows.length;
-  const linked = rows.filter((m) => m.robloxUsername).length;
-  const signedIn = rows.filter((m) => m.hasSignedIn).length;
-  const withAccess = rows.filter((m) => m.hasGameAccess === true).length;
-
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Roster</h1>
-          <p className="mt-1 text-sm text-zinc-500">
-            {total} on the roster · {linked} linked · {signedIn} signed in
-            {isRobloxGroupConfigured() && ` · ${withAccess} in the group`}
-            {awayUntil.size > 0 && ` · ${awayUntil.size} away`}
-          </p>
-        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Roster</h1>
         {canManageRoster && (
           <RosterToolbar groupConfigured={isRobloxGroupConfigured()} />
         )}

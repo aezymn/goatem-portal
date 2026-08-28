@@ -30,10 +30,14 @@ export function useNow(serverNow: number): number {
   );
 }
 
+// Red is for someone who signed in once and then stopped: they had an
+// account and went quiet, which is the thing worth spotting. "Never"
+// stays grey — they were never here to lapse, so flagging them as a
+// problem would be a different (and usually wrong) claim.
 const TONES: Record<string, CapsuleTone> = {
   online: "positive",
   away: "warning",
-  offline: "muted",
+  offline: "negative",
   never: "muted",
 };
 

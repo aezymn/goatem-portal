@@ -1,6 +1,11 @@
 import type { ReactNode } from "react";
 
-export type CapsuleTone = "positive" | "warning" | "muted" | "unknown";
+export type CapsuleTone =
+  | "positive"
+  | "warning"
+  | "negative"
+  | "muted"
+  | "unknown";
 
 /**
  * The one capsule every roster status is drawn with, so "In group",
@@ -27,6 +32,8 @@ export function Capsule({
       "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950/60 dark:text-emerald-400 dark:ring-emerald-900",
     warning:
       "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950/60 dark:text-amber-400 dark:ring-amber-900",
+    negative:
+      "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950/60 dark:text-red-400 dark:ring-red-900",
     muted: "text-zinc-500 ring-zinc-200 dark:text-zinc-400 dark:ring-zinc-800",
     unknown:
       "text-zinc-400 ring-dashed ring-zinc-200 dark:text-zinc-500 dark:ring-zinc-800",
@@ -34,6 +41,7 @@ export function Capsule({
   const dots: Record<CapsuleTone, string> = {
     positive: "bg-emerald-500",
     warning: "bg-amber-500",
+    negative: "bg-red-500",
     muted: "bg-zinc-300 dark:bg-zinc-600",
     unknown: "bg-transparent",
   };

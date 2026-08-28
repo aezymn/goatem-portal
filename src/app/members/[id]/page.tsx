@@ -1,6 +1,7 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Link from "next/link";
 import {
+  getAltAccounts,
   getMemberActivity,
   getMemberById,
   getMemberTotals,
@@ -10,6 +11,7 @@ import { isCreatorDiscordId } from "@/lib/permissions";
 import { asRegion } from "@/lib/regions";
 import { presenceFor } from "@/lib/presence";
 import { StatusBadge } from "@/components/StatusBadge";
+import { YesNoUnknown } from "@/components/RosterStatusCell";
 
 export const dynamic = "force-dynamic";
 
@@ -32,9 +34,15 @@ export default async function MemberProfilePage({
   const member = await getMemberById(id);
   if (!member) notFound();
 
-  const [activity, totals] = await Promise.all([
+  // An alt is an account, not a person. Anyone who lands on one — an old
+  // link, or a roster row — belongs on the profile of the human who owns
+  // it, where the alt is listed alongside everything else they've done.
+  if (member.parentMemberId) redirect(`/members/${member.parentMemberId}`);
+
+  const [activity, totals, alts] = await Promise.all([
     getMemberActivity(id),
     getMemberTotals(id),
+    getAltAccounts(id),
   ]);
 
   const name =
@@ -74,7 +82,6 @@ export default async function MemberProfilePage({
               <Badge tone="emerald">Creator</Badge>
             )}
             {member.isPortalAdmin && <Badge tone="indigo">Admin</Badge>}
-            {member.parentMemberId && <Badge tone="zinc">Alt</Badge>}
             {currentAbsence && <Badge tone="amber">NOA</Badge>}
             {asRegion(member.region) && (
               <Badge tone="outline">{asRegion(member.region)}</Badge>
@@ -83,7 +90,7 @@ export default async function MemberProfilePage({
           <p className="mt-1 text-sm text-zinc-500">
             {member.rank}
             {member.discordUsername && ` · ${member.discordUsername}`}
-            {!member.parentMemberId && ` · ${presence.label.toLowerCase()}`}
+            {` · ${presence.label.toLowerCase()}`}
             {currentAbsence &&
               ` · back ${shortDate(currentAbsence.returnDate)}`}
           </p>
@@ -105,6 +112,45 @@ export default async function MemberProfilePage({
           value={String(activity.absences.length)}
         />
       </div>
+
+      <Panel title="Accounts">
+        <ul className="divide-y divide-zinc-100 dark:divide-zinc-900">
+          {member.robloxUsername ? (
+            <AccountRow
+              label="Roblox"
+              name={member.robloxUsername}
+              href={robloxUrl(member.robloxUserId, member.robloxUsername)}
+              access={member.hasGameAccess}
+            />
+          ) : (
+            <li className="px-4 py-2.5 text-sm text-zinc-500">
+              No Roblox account linked yet.
+            </li>
+          )}
+
+          {alts.map((alt) => (
+            <AccountRow
+              key={alt.id}
+              label="Alt"
+              name={alt.robloxUsername ?? "unnamed alt"}
+              href={
+                alt.robloxUsername
+                  ? robloxUrl(alt.robloxUserId, alt.robloxUsername)
+                  : null
+              }
+              access={alt.hasGameAccess}
+            />
+          ))}
+
+          {member.discordId && (
+            <AccountRow
+              label="Discord"
+              name={member.discordUsername ?? member.discordId}
+              href={`https://discord.com/users/${member.discordId}`}
+            />
+          )}
+        </ul>
+      </Panel>
 
       <Panel title="Recent testing">
         {activity.logs.length === 0 ? (
@@ -177,6 +223,58 @@ export default async function MemberProfilePage({
         )}
       </Panel>
     </div>
+  );
+}
+
+/** Roblox's own profile URL needs the numeric ID, which is resolved at
+ * link time and kept precisely because usernames change. A row that
+ * predates that resolution falls back to a username search rather than
+ * offering a link that 404s. */
+function robloxUrl(userId: string | null, username: string): string {
+  return userId
+    ? `https://www.roblox.com/users/${userId}/profile`
+    : `https://www.roblox.com/search/users?keyword=${encodeURIComponent(username)}`;
+}
+
+function AccountRow({
+  label,
+  name,
+  href,
+  access,
+}: {
+  label: string;
+  name: string;
+  href?: string | null;
+  access?: boolean | null;
+}) {
+  return (
+    <li className="flex flex-wrap items-center gap-3 px-4 py-2.5">
+      <span className="w-14 shrink-0 text-[11px] font-semibold uppercase tracking-wider text-zinc-400">
+        {label}
+      </span>
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="min-w-0 truncate text-sm hover:underline"
+        >
+          {name} ↗
+        </a>
+      ) : (
+        <span className="min-w-0 truncate text-sm">{name}</span>
+      )}
+      {access !== undefined && (
+        <span className="ml-auto">
+          <YesNoUnknown
+            value={access ?? null}
+            yes="In group"
+            no="Not in group"
+            unknown="Unchecked"
+          />
+        </span>
+      )}
+    </li>
   );
 }
 
