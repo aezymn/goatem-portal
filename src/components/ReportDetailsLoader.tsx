@@ -12,7 +12,7 @@ import {
 } from "@/lib/reports";
 import { changeNotesFor, getChangeNote } from "@/lib/changelog";
 import { currentAbsencesByMemberId } from "@/lib/activity";
-import { listRanksWithActions } from "@/lib/ranks";
+import { getCachedRanks } from "@/lib/ranks";
 import { nowMs } from "@/lib/presence";
 import { displayNameFor } from "@/lib/members";
 
@@ -37,7 +37,7 @@ export async function ReportDetailsLoader({
     getReportTimeline(report.id),
     listStages(report.id),
     getReportParticipants(report.id, report.reporterId),
-    listRanksWithActions(),
+    getCachedRanks(),
     currentAbsencesByMemberId(),
     db
       .select({
