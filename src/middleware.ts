@@ -28,7 +28,8 @@ export async function middleware(request: NextRequest) {
   });
 
   const token = await getToken({
-    req: request as any,
+    // @ts-expect-error getToken types mismatch with NextRequest in strict mode
+    req: request,
     secret: process.env.NEXTAUTH_SECRET,
   });
 
