@@ -3,6 +3,8 @@
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { ConfirmAction } from "@/components/ConfirmAction";
+
 /**
  * Removing someone from the roster.
  *
@@ -24,9 +26,9 @@ export function DeleteMemberButton({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
+  const who = label ? `${label}` : "this person";
+
   async function onDelete() {
-    const who = label ? `${label}` : "this person";
-    if (!confirm(`Remove ${who} from the roster?`)) return;
     setBusy(true);
     const res = await fetch(`/api/roster/${memberId}`, { method: "DELETE" });
     setBusy(false);
@@ -34,13 +36,17 @@ export function DeleteMemberButton({
   }
 
   return (
-    <button
-      onClick={onDelete}
-      disabled={busy}
-      title={label ? `Remove ${label}` : "Remove from roster"}
-      aria-label={label ? `Remove ${label}` : "Remove from roster"}
-      className="rounded-md p-1.5 text-zinc-300 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 disabled:opacity-40 group-hover/row:text-zinc-400 dark:text-zinc-700 dark:hover:bg-red-950 dark:hover:text-red-400 dark:group-hover/row:text-zinc-500"
+    <ConfirmAction
+      title="Are you sure?"
+      description={`Remove ${who} from the roster?`}
+      onConfirm={onDelete}
     >
+      <button
+        disabled={busy}
+        title={label ? `Remove ${label}` : "Remove from roster"}
+        aria-label={label ? `Remove ${label}` : "Remove from roster"}
+        className="rounded-md p-1.5 text-zinc-300 transition hover:bg-red-50 hover:text-red-600 focus-visible:opacity-100 disabled:opacity-40 group-hover/row:text-zinc-400 dark:text-zinc-700 dark:hover:bg-red-950 dark:hover:text-red-400 dark:group-hover/row:text-zinc-500"
+      >
       <svg
         xmlns="http://www.w3.org/2000/svg"
         viewBox="0 0 24 24"
@@ -53,6 +59,7 @@ export function DeleteMemberButton({
       >
         <path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
       </svg>
-    </button>
+      </button>
+    </ConfirmAction>
   );
 }

@@ -95,18 +95,18 @@ export default async function ReportsPage({
               </span>
             </h2>
 
-            <ul className="divide-y divide-zinc-100 overflow-hidden rounded-xl border border-zinc-200 dark:divide-zinc-900 dark:border-zinc-800">
+            <ul className="flex flex-col gap-3">
               {reports.map((report) => (
-                <li key={report.id}>
+                <li key={report.id} className="group relative">
                   <Link
                     href={`/reports/${report.id}`}
                     // Reports you're on carry an accent down the left edge
                     // and a tinted background — enough to pick yours out
                     // of a long list at a glance, without shouting.
-                    className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 border-l-2 py-3 pr-4 transition ${
+                    className={`flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl border py-3.5 pr-4 transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg hover:shadow-zinc-200/40 dark:hover:shadow-black/60 ${
                       mine.has(report.id)
-                        ? "border-indigo-500 bg-indigo-50/50 pl-3.5 hover:bg-indigo-50 dark:bg-indigo-950/20 dark:hover:bg-indigo-950/40"
-                        : "border-transparent pl-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                        ? "border-indigo-200/60 bg-indigo-50/30 pl-3.5 hover:bg-indigo-50/60 hover:border-indigo-300/80 dark:border-indigo-900/50 dark:bg-indigo-950/20 dark:hover:bg-indigo-900/30 dark:hover:border-indigo-800"
+                        : "border-zinc-200/60 bg-white/60 pl-4 hover:border-zinc-300/80 hover:bg-white dark:border-zinc-800/60 dark:bg-zinc-950/40 dark:hover:border-zinc-700 dark:hover:bg-zinc-900"
                     }`}
                   >
                     <span className="min-w-0 flex-1">

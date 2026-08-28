@@ -16,7 +16,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await getServerSession(authOptions);
   return (
     <html lang="en" className="h-full antialiased">
-      <body className="min-h-full bg-zinc-50 dark:bg-black">
+      <body className="min-h-full mesh-bg text-zinc-900 dark:text-zinc-100">
         <Providers session={session}>
           <PresenceBeacon />
           <Sidebar />

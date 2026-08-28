@@ -99,7 +99,7 @@ export function Sidebar() {
     <>
       {/* Mobile: a slim bar with the mark and a menu toggle. The sidebar
           itself becomes an overlay rather than squeezing the content. */}
-      <div className="flex items-center gap-3 border-b border-zinc-200 px-4 py-3 md:hidden dark:border-zinc-800">
+      <div className="glass flex items-center gap-3 border-b border-zinc-200/50 px-4 py-3 md:hidden dark:border-zinc-800/50">
         <button
           onClick={() => setMobileOpen((v) => !v)}
           aria-label="Menu"
@@ -124,7 +124,7 @@ export function Sidebar() {
       <aside
         className={`${
           mobileOpen ? "translate-x-0" : "-translate-x-full"
-        } fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-zinc-200 bg-white transition-transform md:translate-x-0 dark:border-zinc-800 dark:bg-zinc-950`}
+        } glass fixed inset-y-0 left-0 z-40 flex w-64 shrink-0 flex-col border-r border-zinc-200/50 transition-transform md:translate-x-0 dark:border-zinc-800/50`}
       >
         <div className="hidden px-4 py-4 md:block">
           <Brand />
@@ -257,7 +257,7 @@ function UserChip({
   return (
     <div className="relative" ref={menuRef}>
       {menuOpen && (
-        <div className="absolute bottom-full left-0 z-10 mb-2 w-full rounded-md border border-zinc-200 bg-white py-1 shadow-lg dark:border-zinc-800 dark:bg-zinc-900">
+        <div className="glass absolute bottom-full left-0 z-10 mb-2 w-full rounded-md border border-zinc-200/50 py-1 shadow-xl dark:border-zinc-800/50">
           <button
             onClick={() => signOut()}
             className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"

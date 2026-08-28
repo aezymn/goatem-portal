@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ConfirmAction } from "@/components/ConfirmAction";
 
 interface MemberRow {
   id: string;
@@ -56,17 +57,9 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
       }
       setDebouncedQuery(trimmed);
     }, 300);
-    return () => clearTimeout(timeout);
   }, [query]);
 
   async function addAdmin(member: MemberRow) {
-    if (
-      !confirm(
-        `Give ${nameOf(member)} full admin access to the portal? This includes managing the roster, ranks, and everything else — are you sure?`
-      )
-    ) {
-      return;
-    }
     setBusyId(member.id);
     setError(null);
     const res = await fetch("/api/admin/admins", {
@@ -85,13 +78,6 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
   }
 
   async function removeAdmin(member: MemberRow) {
-    if (
-      !confirm(
-        `Remove ${nameOf(member)}'s admin access? They'll fall back to whatever their rank grants.`
-      )
-    ) {
-      return;
-    }
     setBusyId(member.id);
     setError(null);
     const res = await fetch(`/api/admin/admins/${member.id}`, {
@@ -113,19 +99,24 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
           {admins.map((m) => (
             <li
               key={m.id}
-              className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-2 dark:border-zinc-800"
+              className="flex items-center justify-between rounded-lg border border-zinc-200/60 bg-white/60 px-4 py-2 shadow-sm backdrop-blur-sm dark:border-zinc-800/60 dark:bg-zinc-950/40"
             >
               <div>
                 <span className="font-medium">{nameOf(m)}</span>
                 <span className="ml-2 text-xs text-zinc-500">{m.rank}</span>
               </div>
-              <button
-                onClick={() => removeAdmin(m)}
-                disabled={busyId === m.id}
-                className="text-xs text-red-600 hover:underline disabled:opacity-50"
+              <ConfirmAction
+                title="Are you sure?"
+                description={`Remove ${nameOf(m)}'s admin access? They'll fall back to whatever their rank grants.`}
+                onConfirm={() => removeAdmin(m)}
               >
-                Remove
-              </button>
+                <button
+                  disabled={busyId === m.id}
+                  className="text-xs text-red-600 hover:underline disabled:opacity-50"
+                >
+                  Remove
+                </button>
+              </ConfirmAction>
             </li>
           ))}
           {admins.length === 0 && (
@@ -142,7 +133,7 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="Search the roster by Roblox username…"
-          className="w-full max-w-sm rounded-md border border-zinc-300 px-3 py-1.5 text-sm dark:border-zinc-700 dark:bg-zinc-900"
+          className="w-full max-w-sm rounded-md border border-zinc-300 px-3 py-1.5 text-sm shadow-sm dark:border-zinc-700 dark:bg-zinc-900"
         />
         {searching && (
           <p className="mt-2 text-xs text-zinc-500">Searching…</p>
@@ -157,19 +148,24 @@ export function AdminsPanel({ initialAdmins }: { initialAdmins: MemberRow[] }) {
             {candidates.map((m) => (
               <li
                 key={m.id}
-                className="flex items-center justify-between rounded-lg border border-zinc-200 px-4 py-2 dark:border-zinc-800"
+                className="flex items-center justify-between rounded-lg border border-zinc-200/60 bg-white/60 px-4 py-2 shadow-sm backdrop-blur-sm dark:border-zinc-800/60 dark:bg-zinc-950/40"
               >
                 <div>
                   <span className="font-medium">{nameOf(m)}</span>
                   <span className="ml-2 text-xs text-zinc-500">{m.rank}</span>
                 </div>
-                <button
-                  onClick={() => addAdmin(m)}
-                  disabled={busyId === m.id}
-                  className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white hover:bg-indigo-500 disabled:opacity-50"
+                <ConfirmAction
+                  title="Are you sure?"
+                  description={`Give ${nameOf(m)} full admin access to the portal? This includes managing the roster, ranks, and everything else.`}
+                  onConfirm={() => addAdmin(m)}
                 >
-                  Add
-                </button>
+                  <button
+                    disabled={busyId === m.id}
+                    className="rounded-md bg-indigo-600 px-3 py-1 text-xs font-medium text-white shadow-sm hover:bg-indigo-500 disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </ConfirmAction>
               </li>
             ))}
           </ul>

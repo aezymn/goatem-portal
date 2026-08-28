@@ -29,16 +29,16 @@ export function asTagTone(value: string | null | undefined): TagTone {
  * combination is written out in full here rather than built by string
  * interpolation — an interpolated `bg-${tone}-100` compiles to nothing. */
 export const TAG_TONE_CLASSES: Record<TagTone, string> = {
-  zinc: "bg-zinc-100 text-zinc-700 ring-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:ring-zinc-700",
+  zinc: "bg-zinc-100/80 text-zinc-700 ring-zinc-500/20 dark:bg-zinc-500/10 dark:text-zinc-300 dark:ring-zinc-400/20",
   emerald:
-    "bg-emerald-50 text-emerald-700 ring-emerald-200 dark:bg-emerald-950 dark:text-emerald-400 dark:ring-emerald-900",
+    "bg-emerald-100/80 text-emerald-800 ring-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-400 dark:ring-emerald-400/20",
   amber:
-    "bg-amber-50 text-amber-700 ring-amber-200 dark:bg-amber-950 dark:text-amber-400 dark:ring-amber-900",
-  red: "bg-red-50 text-red-700 ring-red-200 dark:bg-red-950 dark:text-red-400 dark:ring-red-900",
-  sky: "bg-sky-50 text-sky-700 ring-sky-200 dark:bg-sky-950 dark:text-sky-400 dark:ring-sky-900",
+    "bg-amber-100/80 text-amber-800 ring-amber-500/30 dark:bg-amber-500/10 dark:text-amber-400 dark:ring-amber-400/20",
+  red: "bg-red-100/80 text-red-800 ring-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:ring-red-400/20",
+  sky: "bg-sky-100/80 text-sky-800 ring-sky-500/30 dark:bg-sky-500/10 dark:text-sky-400 dark:ring-sky-400/20",
   indigo:
-    "bg-indigo-50 text-indigo-700 ring-indigo-200 dark:bg-indigo-950 dark:text-indigo-300 dark:ring-indigo-900",
+    "bg-indigo-100/80 text-indigo-800 ring-indigo-500/30 dark:bg-indigo-500/10 dark:text-indigo-400 dark:ring-indigo-400/20",
   violet:
-    "bg-violet-50 text-violet-700 ring-violet-200 dark:bg-violet-950 dark:text-violet-300 dark:ring-violet-900",
-  pink: "bg-pink-50 text-pink-700 ring-pink-200 dark:bg-pink-950 dark:text-pink-300 dark:ring-pink-900",
+    "bg-violet-100/80 text-violet-800 ring-violet-500/30 dark:bg-violet-500/10 dark:text-violet-400 dark:ring-violet-400/20",
+  pink: "bg-pink-100/80 text-pink-800 ring-pink-500/30 dark:bg-pink-500/10 dark:text-pink-400 dark:ring-pink-400/20",
 };
