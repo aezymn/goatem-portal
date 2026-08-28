@@ -1,11 +1,12 @@
 import { db } from "@/db";
 import {
   bugParticipants,
+  bugReports,
   bugStages,
   comments,
   members,
 } from "@/db/schema";
-import { and, asc, desc, eq, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, isNotNull, isNull, lt, sql } from "drizzle-orm";
 
 /**
  * Reading a bug report and the people on it.
@@ -212,6 +213,10 @@ export interface TimelineEntry {
   authorRank: string;
   /** Which stage this was said under; null means before any stage. */
   stageId: string | null;
+  /** The message this one answers, flattened for display — a reply shows
+   * a stub of what it's replying to rather than needing the whole thread
+   * in memory to look it up. */
+  replyTo: { id: string; authorName: string; excerpt: string } | null;
 }
 
 /**
@@ -237,23 +242,140 @@ export async function getReportTimeline(
       authorAvatarUrl: members.discordAvatarUrl,
       authorRank: members.rank,
       stageId: comments.stageId,
+      replyToId: comments.replyToId,
     })
     .from(comments)
     .innerJoin(members, eq(comments.authorId, members.id))
     .where(and(eq(comments.bugReportId, reportId), isNull(comments.deletedAt)))
     .orderBy(asc(comments.createdAt));
 
-  return rows.map((r) => ({
-    id: r.id,
-    body: r.body,
-    attachments: r.attachments ?? [],
-    createdAt: r.createdAt.toISOString(),
-    authorId: r.authorId,
-    authorName: r.robloxUsername ?? r.discordUsername ?? "Unknown member",
-    authorAvatarUrl: r.authorAvatarUrl,
-    authorRank: r.authorRank,
-    stageId: r.stageId,
-  }));
+  // Replies point at other messages in the same thread, so the stub can
+  // be built from what's already loaded — no second query, and a reply to
+  // a since-deleted message simply loses its stub rather than erroring.
+  const byId = new Map(rows.map((r) => [r.id, r]));
+
+  return rows.map((r) => {
+    const parent = r.replyToId ? byId.get(r.replyToId) : undefined;
+    return {
+      id: r.id,
+      body: r.body,
+      attachments: r.attachments ?? [],
+      createdAt: r.createdAt.toISOString(),
+      authorId: r.authorId,
+      authorName: r.robloxUsername ?? r.discordUsername ?? "Unknown member",
+      authorAvatarUrl: r.authorAvatarUrl,
+      authorRank: r.authorRank,
+      stageId: r.stageId,
+      replyTo: parent
+        ? {
+            id: parent.id,
+            authorName:
+              parent.robloxUsername ??
+              parent.discordUsername ??
+              "Unknown member",
+            excerpt: excerpt(parent.body, parent.attachments ?? []),
+          }
+        : null,
+    };
+  });
+}
+
+/** One line of what's being replied to. An attachment-only message has no
+ * words to quote, so it says so rather than showing an empty stub. */
+function excerpt(body: string, attachments: string[]): string {
+  const text = body.trim().replace(/\s+/g, " ");
+  if (text) return text.length > 90 ? `${text.slice(0, 89)}…` : text;
+  return attachments.length > 0 ? "(attachment)" : "(no text)";
+}
+
+/**
+ * A cheap token that changes whenever anything on this report changes.
+ *
+ * Open pages poll this and re-render only when it moves, which keeps
+ * everyone's view current without websockets and without re-fetching the
+ * whole thread on a timer. Counts as well as timestamps, so a DELETE
+ * (which moves no timestamp forward) still registers.
+ */
+export async function getReportVersion(reportId: string): Promise<string> {
+  const [row] = await db
+    .select({
+      token: sql<string>`concat(
+        coalesce(extract(epoch from r."updated_at")::bigint, 0), '-',
+        coalesce(extract(epoch from r."completed_at")::bigint, 0), '-',
+        coalesce(extract(epoch from r."archived_at")::bigint, 0), '-',
+        (select count(*) from "comments" c
+          where c."bug_report_id" = r."id" and c."deleted_at" is null), '-',
+        (select coalesce(max(extract(epoch from c."created_at"))::bigint, 0)
+          from "comments" c
+          where c."bug_report_id" = r."id" and c."deleted_at" is null), '-',
+        (select count(*) from "bug_stages" s
+          where s."bug_report_id" = r."id" and s."deleted_at" is null), '-',
+        (select count(*) from "bug_participants" bp
+          where bp."bug_report_id" = r."id"), '-',
+        (select count(*) from "bug_report_tags" rt
+          where rt."bug_report_id" = r."id")
+      )`,
+    })
+    .from(sql`"bug_reports" r`)
+    .where(sql`r."id" = ${reportId}`)
+    .limit(1);
+  return row?.token ?? "gone";
+}
+
+/** A report with a locking tag on it is closed: no new messages, and
+ * nobody joins or leaves. Reading it stays open to everyone. */
+export async function getReportLockState(reportId: string) {
+  const [row] = await db
+    .select({
+      completedAt: bugReports.completedAt,
+      archivedAt: bugReports.archivedAt,
+    })
+    .from(bugReports)
+    .where(eq(bugReports.id, reportId))
+    .limit(1);
+  return {
+    locked: Boolean(row?.completedAt),
+    completedAt: row?.completedAt ?? null,
+    archivedAt: row?.archivedAt ?? null,
+  };
+}
+
+/** How long a completed report sits before it archives itself. */
+export const ARCHIVE_AFTER_DAYS = 30;
+
+/**
+ * Archives every report that has been sitting completed for longer than
+ * ARCHIVE_AFTER_DAYS. Idempotent — already-archived rows are skipped — so
+ * it's safe to run on a schedule and safe to run twice.
+ */
+export async function archiveStaleCompleted(): Promise<number> {
+  const cutoff = new Date(
+    Date.now() - ARCHIVE_AFTER_DAYS * 24 * 60 * 60 * 1000
+  );
+  const rows = await db
+    .update(bugReports)
+    .set({ archivedAt: new Date() })
+    .where(
+      and(
+        isNull(bugReports.archivedAt),
+        isNull(bugReports.deletedAt),
+        // Built with drizzle's operators rather than a sql`` fragment on
+        // purpose: interpolating a JS Date into raw SQL hands postgres.js
+        // a Date where it wants a string, and the query throws. Going
+        // through the column means the timestamp is mapped properly.
+        isNotNull(bugReports.completedAt),
+        lt(bugReports.completedAt, cutoff)
+      )
+    )
+    .returning({ id: bugReports.id });
+  return rows.length;
+}
+
+export async function setArchived(reportId: string, archived: boolean) {
+  await db
+    .update(bugReports)
+    .set({ archivedAt: archived ? new Date() : null })
+    .where(eq(bugReports.id, reportId));
 }
 
 /** Which reports the given member has joined — for marking "yours" in

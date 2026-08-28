@@ -55,6 +55,9 @@ export function Sidebar() {
   const authed = status === "authenticated" && !session?.stale;
   const isCreator = authed && session.user.isCreator;
   const isAdmin = authed && (session.user.isCreator || session.user.isPortalAdmin);
+  const canBugSetup =
+    isAdmin ||
+    (authed && (session.user.actions ?? []).includes("bugsetup.manage"));
 
   const [me, setMe] = useState<Me | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -80,9 +83,13 @@ export function Sidebar() {
 
   // Admin Access is CREATOR-only (see src/lib/permissions.ts), so it isn't
   // even listed for a portal admin who could never open it.
-  const adminItems = ADMIN_NAV.filter(
-    (item) => isCreator || item.href !== "/admin/admins"
-  );
+  const adminItems = ADMIN_NAV.filter((item) => {
+    if (item.href === "/admin/admins") return isCreator;
+    // Bug setup is grantable by rank, so someone who holds that action
+    // sees it here even though the rest of Admin isn't theirs.
+    if (item.href === "/admin/bug-setup") return canBugSetup;
+    return isAdmin;
+  });
 
   return (
     <>
@@ -123,7 +130,7 @@ export function Sidebar() {
           {authed ? (
             <>
               <Section items={MAIN_NAV} pathname={pathname} />
-              {isAdmin && adminItems.length > 0 && (
+              {adminItems.length > 0 && (
                 <Section
                   heading="Admin"
                   items={adminItems}

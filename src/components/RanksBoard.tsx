@@ -9,7 +9,7 @@ import { RANK_ACTIONS, type RankAction } from "@/lib/permissions";
 const ACTION_LABELS: Record<RankAction, { short: string; hint: string }> = {
   "reports.triage": {
     short: "Triage reports",
-    hint: "Change a bug report's status and assignee",
+    hint: "Set a bug report's category and tags, and archive it",
   },
   "reports.delete": {
     short: "Delete reports",
@@ -18,6 +18,10 @@ const ACTION_LABELS: Record<RankAction, { short: string; hint: string }> = {
   "roster.manage": {
     short: "Manage roster",
     hint: "Add, edit and remove people on the roster, and run a Discord sync",
+  },
+  "bugsetup.manage": {
+    short: "Manage bug setup",
+    hint: "Create and edit the bug categories, tag types and tags everyone picks from",
   },
 };
 

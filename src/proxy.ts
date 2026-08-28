@@ -25,8 +25,31 @@ export async function proxy(request: Request) {
     return NextResponse.redirect(signInUrl);
   }
 
+  // First sign-in insists on a Roblox username. Everything in the portal
+  // is keyed to who someone is in-game — group membership, alt accounts,
+  // testing logs — so an unlinked account is sent to link before it can
+  // go anywhere else. The claim rides on the JWT to keep this a
+  // no-database-hit check; /link-roblox re-checks against the database
+  // itself, so a stale claim can only ever cost one extra redirect.
+  if (token?.linked === false && !pathname.startsWith("/link-roblox")) {
+    return NextResponse.redirect(new URL("/link-roblox", request.url));
+  }
+
   if (pathname.startsWith("/admin")) {
     const isFullAdmin = Boolean(token?.isCreator || token?.isPortalAdmin);
+    // Bug setup is a rank-grantable action, so it can't sit behind the
+    // blanket admin gate the rest of /admin uses. The page re-checks the
+    // action server-side; this only decides whether to let them through.
+    const canBugSetup =
+      isFullAdmin ||
+      (Array.isArray(token?.actions) &&
+        token.actions.includes("bugsetup.manage"));
+    if (pathname.startsWith("/admin/bug-setup")) {
+      if (!canBugSetup) {
+        return NextResponse.redirect(new URL("/access-denied", request.url));
+      }
+      return NextResponse.next();
+    }
     if (!isFullAdmin) {
       return NextResponse.redirect(new URL("/access-denied", request.url));
     }
@@ -49,5 +72,13 @@ export async function proxy(request: Request) {
 }
 
 export const config = {
-  matcher: ["/reports/:path*", "/roster/:path*", "/admin/:path*"],
+  matcher: [
+    "/reports/:path*",
+    "/roster/:path*",
+    "/admin/:path*",
+    "/absence/:path*",
+    "/testing/:path*",
+    "/members/:path*",
+    "/link-roblox",
+  ],
 };

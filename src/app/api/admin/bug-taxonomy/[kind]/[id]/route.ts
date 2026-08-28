@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { requireAdmin } from "@/lib/requireSession";
+import { requireAction } from "@/lib/requireSession";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import {
@@ -30,7 +30,7 @@ export async function PATCH(
   request: Request,
   ctx: RouteContext<"/api/admin/bug-taxonomy/[kind]/[id]">
 ) {
-  const auth = await requireAdmin();
+  const auth = await requireAction("bugsetup.manage");
   if (!auth.ok) return auth.response;
   const { kind: rawKind, id } = await ctx.params;
   const kind = kindOf(rawKind);
@@ -59,6 +59,7 @@ export async function PATCH(
       tone?: string;
       groupId?: string | null;
       exclusive?: boolean;
+      locksReport?: boolean;
     };
 
     if (kind === "categories") {
@@ -78,6 +79,9 @@ export async function PATCH(
           : {}),
         ...(changes.groupId !== undefined
           ? { groupId: changes.groupId || null }
+          : {}),
+        ...(changes.locksReport !== undefined
+          ? { locksReport: changes.locksReport }
           : {}),
       });
     }
@@ -110,7 +114,7 @@ export async function DELETE(
   _request: Request,
   ctx: RouteContext<"/api/admin/bug-taxonomy/[kind]/[id]">
 ) {
-  const auth = await requireAdmin();
+  const auth = await requireAction("bugsetup.manage");
   if (!auth.ok) return auth.response;
   const { kind: rawKind, id } = await ctx.params;
   const kind = kindOf(rawKind);

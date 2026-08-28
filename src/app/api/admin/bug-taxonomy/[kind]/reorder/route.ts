@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { requireAdmin } from "@/lib/requireSession";
+import { requireAction } from "@/lib/requireSession";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import { reorder } from "@/lib/bugTaxonomy";
@@ -16,7 +16,7 @@ export async function PUT(
   request: Request,
   ctx: RouteContext<"/api/admin/bug-taxonomy/[kind]/reorder">
 ) {
-  const auth = await requireAdmin();
+  const auth = await requireAction("bugsetup.manage");
   if (!auth.ok) return auth.response;
 
   const { kind } = await ctx.params;

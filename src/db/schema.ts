@@ -212,6 +212,11 @@ export const bugTags = pgTable("bug_tags", {
   id: text("id").primaryKey().$defaultFn(() => createId()),
   name: text("name").notNull().unique(),
   tone: text("tone").notNull().default("zinc"),
+  // Applying a tag with this set closes the report: it locks the thread
+  // and starts the archive clock. A property of the tag rather than a
+  // hardcoded name, so "Complete" can be renamed — or a second closing
+  // tag like "Won't fix" added — without touching code.
+  locksReport: boolean("locks_report").notNull().default(false),
   // ON DELETE SET NULL: removing a group should ungroup its tags, never
   // delete labels that reports are still using.
   groupId: text("group_id").references(
@@ -248,6 +253,15 @@ export const bugReports = pgTable(
     // images). A plain array is enough because nothing ever queries
     // across attachments; they're only ever read alongside their report.
     attachments: jsonb("attachments").$type<string[]>().notNull().default([]),
+    // When a locking tag (normally "Complete") was applied. Doubles as
+    // the lock — a completed report takes no new messages and nobody
+    // joins or leaves it — and as the clock the 30-day auto-archive runs
+    // off. Cleared the moment the locking tag comes off, so unlocking is
+    // just untagging rather than a separate switch that can disagree.
+    completedAt: timestamp("completed_at", { withTimezone: true }),
+    // Out of the way, not gone. Archived reports drop off the default
+    // list and are still readable.
+    archivedAt: timestamp("archived_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
@@ -258,6 +272,8 @@ export const bugReports = pgTable(
   },
   (table) => [
     index("bug_reports_category_id_idx").on(table.categoryId),
+    index("bug_reports_completed_at_idx").on(table.completedAt),
+    index("bug_reports_archived_at_idx").on(table.archivedAt),
     index("bug_reports_deleted_at_idx").on(table.deletedAt),
   ]
 );
@@ -274,6 +290,12 @@ export const comments = pgTable(
       .notNull()
       .references(() => members.id),
     attachments: jsonb("attachments").$type<string[]>().notNull().default([]),
+    // A direct reply to another message in the same thread. Self-FK, ON
+    // DELETE SET NULL: deleting the message being answered leaves the
+    // answer standing rather than taking it down too.
+    replyToId: text("reply_to_id").references((): AnyPgColumn => comments.id, {
+      onDelete: "set null",
+    }),
     // Which stage was current when this was written. Null means it was
     // said before any stage existed, so it sits under the report itself.
     // ON DELETE SET NULL: removing a stage must not delete what people

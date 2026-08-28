@@ -56,3 +56,12 @@ export async function markSignedIn(discordId: string): Promise<void> {
     console.error("[auth] couldn't record sign-in:", err);
   }
 }
+
+/** Whether this person has a Roblox username on their roster row yet.
+ * The portal insists on one at first sign-in — see src/proxy.ts — because
+ * a tester with no Roblox account can't be checked against the group or
+ * matched to anything in-game. */
+export async function hasRobloxLink(discordId: string): Promise<boolean> {
+  const member = await getMemberByDiscordId(discordId);
+  return Boolean(member?.robloxUsername);
+}

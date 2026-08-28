@@ -1,6 +1,6 @@
 import type { AuthOptions } from "next-auth";
 import DiscordProvider from "next-auth/providers/discord";
-import { getMemberByDiscordId, markSignedIn } from "@/lib/members";
+import { getMemberByDiscordId, hasRobloxLink, markSignedIn } from "@/lib/members";
 import { getRankActions } from "@/lib/ranks";
 import { isCreatorDiscordId } from "@/lib/permissions";
 import type { RankAction } from "@/lib/permissions";
@@ -123,7 +123,13 @@ export const authOptions: AuthOptions = {
           return "/sign-in?error=DiscordUnavailable";
       }
     },
-    async jwt({ token, account, profile }) {
+    async jwt({ token, account, profile, trigger }) {
+      // Linking a Roblox username calls useSession().update(), which lands
+      // here — refresh the claim straight away rather than leaving the
+      // person gated until the next periodic recheck.
+      if (trigger === "update" && token.discordId) {
+        token.linked = await hasRobloxLink(token.discordId);
+      }
       const isInitialSignIn = Boolean(account && profile);
 
       if (isInitialSignIn && account?.access_token) {
@@ -136,6 +142,7 @@ export const authOptions: AuthOptions = {
         // record the fact here — this is the only moment we know it.
         await markSignedIn(discordId);
         token.discordId = discordId;
+        token.linked = await hasRobloxLink(discordId);
         token.isCreator = isCreatorDiscordId(discordId);
         token.isPortalAdmin = await computeIsPortalAdmin(discordId);
         token.actions = await computeRankActions(discordId);
@@ -177,6 +184,7 @@ export const authOptions: AuthOptions = {
         // would then claim they never had. Re-marking on each recheck
         // means it corrects itself within one interval.
         await markSignedIn(token.discordId);
+        token.linked = await hasRobloxLink(token.discordId);
         token.isCreator = isCreatorDiscordId(token.discordId);
         token.isPortalAdmin = await computeIsPortalAdmin(token.discordId);
         token.actions = await computeRankActions(token.discordId);

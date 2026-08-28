@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { requireAdmin } from "@/lib/requireSession";
+import { requireAction } from "@/lib/requireSession";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
 import {
@@ -42,7 +42,7 @@ export async function GET(
   _request: Request,
   ctx: RouteContext<"/api/admin/bug-taxonomy/[kind]">
 ) {
-  const auth = await requireAdmin();
+  const auth = await requireAction("bugsetup.manage");
   if (!auth.ok) return auth.response;
   const kind = kindOf((await ctx.params).kind);
   if (!kind) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -58,7 +58,7 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/admin/bug-taxonomy/[kind]">
 ) {
-  const auth = await requireAdmin();
+  const auth = await requireAction("bugsetup.manage");
   if (!auth.ok) return auth.response;
   const kind = kindOf((await ctx.params).kind);
   if (!kind) return NextResponse.json({ error: "not found" }, { status: 404 });
@@ -87,6 +87,7 @@ export async function POST(
       tone?: string;
       groupId?: string | null;
       exclusive?: boolean;
+      locksReport?: boolean;
     };
 
     const created =
@@ -97,7 +98,8 @@ export async function POST(
           : await createTag(
               data.name,
               asTagTone(data.tone),
-              data.groupId ?? null
+              data.groupId ?? null,
+              data.locksReport === true
             );
 
     await logAudit(db, {

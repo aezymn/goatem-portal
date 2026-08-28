@@ -31,5 +31,10 @@ declare module "next-auth/jwt" {
     accessToken?: string;
     rolesCheckedAt?: number;
     invalid?: boolean;
+    /** Whether they've linked a Roblox username yet. Carried on the token
+     * so src/proxy.ts can gate first sign-in without a database round
+     * trip on every page load. Refreshed on each periodic recheck, and
+     * immediately by the link route calling session update(). */
+    linked?: boolean;
   }
 }

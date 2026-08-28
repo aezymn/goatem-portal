@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { AttachmentView } from "@/components/AttachmentView";
 import { AttachmentFields } from "@/components/AttachmentFields";
+import { useLiveReport } from "@/components/useLiveReport";
 import type { StageRow, TimelineEntry } from "@/lib/reports";
 
 interface ReportBody {
@@ -34,6 +35,8 @@ export function ReportThread({
   canReply,
   canAddStage,
   canRemoveStage,
+  locked,
+  version,
 }: {
   reportId: string;
   body: ReportBody;
@@ -45,7 +48,26 @@ export function ReportThread({
   /** Whether the viewer may remove ANY stage; their own is always theirs
    * to remove and is decided per-stage below. */
   canRemoveStage: boolean;
+  /** Completed reports take no new messages and no new stages. */
+  locked: boolean;
+  version: string;
 }) {
+  // Everyone looking at this report sees each other's messages, stages and
+  // tag changes appear without touching anything.
+  useLiveReport(reportId, version);
+
+  const [replyTo, setReplyTo] = useState<TimelineEntry | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+
+  function toggleStage(id: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   const byStage = new Map<string | null, TimelineEntry[]>();
   for (const entry of entries) {
     const key = entry.stageId ?? null;
@@ -73,6 +95,7 @@ export function ReportThread({
         <Node
           marker="filed"
           title="Reported"
+          count={(byStage.get(null) ?? []).length + orphaned.length}
           meta={
             <>
               <Link
@@ -97,6 +120,7 @@ export function ReportThread({
           <Messages
             entries={[...(byStage.get(null) ?? []), ...orphaned]}
             meMemberId={meMemberId}
+            onReply={locked ? undefined : setReplyTo}
           />
         </Node>
 
@@ -105,6 +129,9 @@ export function ReportThread({
             key={stage.id}
             marker="stage"
             title={stage.title}
+            count={(byStage.get(stage.id) ?? []).length}
+            collapsed={collapsed.has(stage.id)}
+            onToggle={() => toggleStage(stage.id)}
             meta={
               <>
                 <Link
@@ -130,15 +157,38 @@ export function ReportThread({
             <Messages
               entries={byStage.get(stage.id) ?? []}
               meMemberId={meMemberId}
+              onReply={locked ? undefined : setReplyTo}
             />
           </Node>
         ))}
       </div>
 
-      {canAddStage && <AddStage reportId={reportId} />}
+      {canAddStage && !locked && <AddStage reportId={reportId} />}
 
-      {canReply ? (
-        <Composer reportId={reportId} />
+      {locked ? (
+        <p className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-zinc-100 px-3.5 py-3 text-sm text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-400">
+          <svg
+            aria-hidden
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={1.8}
+            strokeLinecap="round"
+            className="h-4 w-4 shrink-0"
+          >
+            <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            <rect x="4" y="11" width="16" height="10" rx="2" />
+          </svg>
+          This report is complete, so the thread is locked. Nothing new can
+          be posted and nobody can join or leave. Take the completed tag off
+          in Settings to reopen it.
+        </p>
+      ) : canReply ? (
+        <Composer
+          reportId={reportId}
+          replyTo={replyTo}
+          onClearReply={() => setReplyTo(null)}
+        />
       ) : (
         <p className="border-t border-zinc-200 pt-3 text-sm text-zinc-500 dark:border-zinc-800">
           You need to be on the roster to reply.
@@ -155,14 +205,23 @@ function Node({
   title,
   meta,
   action,
+  count,
+  collapsed,
+  onToggle,
   children,
 }: {
   marker: "filed" | "stage";
   title: string;
   meta: React.ReactNode;
   action?: React.ReactNode;
+  count?: number;
+  collapsed?: boolean;
+  /** Given only for stages — the report node isn't collapsible, since
+   * hiding the bug itself would leave the page saying nothing. */
+  onToggle?: () => void;
   children: React.ReactNode;
 }) {
+  const Heading = onToggle ? "button" : "div";
   return (
     <section className="relative pl-7">
       <span
@@ -174,11 +233,45 @@ function Node({
         }`}
       />
       <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-        <h3 className="text-sm font-semibold">{title}</h3>
+        <Heading
+          {...(onToggle
+            ? {
+                onClick: onToggle,
+                "aria-expanded": !collapsed,
+                className:
+                  "flex items-center gap-1.5 text-left transition hover:opacity-70",
+              }
+            : { className: "flex items-center gap-1.5" })}
+        >
+          {onToggle && (
+            <svg
+              aria-hidden
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2.5}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className={`h-3 w-3 shrink-0 text-zinc-400 transition-transform ${
+                collapsed ? "" : "rotate-90"
+              }`}
+            >
+              <path d="M9 6l6 6-6 6" />
+            </svg>
+          )}
+          <h3 className="text-sm font-semibold">{title}</h3>
+        </Heading>
         <span className="text-xs text-zinc-400">{meta}</span>
+        {collapsed && count !== undefined && count > 0 && (
+          <span className="rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-medium tabular-nums text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400">
+            {count}
+          </span>
+        )}
         {action && <span className="ml-auto">{action}</span>}
       </div>
-      <div className="mt-2 flex flex-col gap-3">{children}</div>
+      {!collapsed && (
+        <div className="mt-2 flex flex-col gap-3">{children}</div>
+      )}
     </section>
   );
 }
@@ -186,9 +279,12 @@ function Node({
 function Messages({
   entries,
   meMemberId,
+  onReply,
 }: {
   entries: TimelineEntry[];
   meMemberId: string | null;
+  /** Absent on a locked thread — there's nothing to reply into. */
+  onReply?: (entry: TimelineEntry) => void;
 }) {
   if (entries.length === 0) return null;
   return (
@@ -200,7 +296,8 @@ function Messages({
         return (
           <li
             key={entry.id}
-            className={`flex gap-2.5 ${mine ? "flex-row-reverse" : ""}`}
+            id={`m-${entry.id}`}
+            className={`group/msg flex gap-2.5 ${mine ? "flex-row-reverse" : ""}`}
           >
             <div className="w-8 shrink-0">
               {!runsOn && <Avatar entry={entry} />}
@@ -229,17 +326,42 @@ function Messages({
                 </p>
               )}
 
-              {entry.body && (
-                <div
-                  className={`w-fit max-w-full rounded-2xl px-3.5 py-2 text-sm ${
-                    mine
-                      ? "rounded-br-sm bg-indigo-600 text-white"
-                      : "rounded-bl-sm bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+              {/* What this answers, if anything — a quoted stub that
+                  jumps to the original, the way a chat client does it. */}
+              {entry.replyTo && (
+                <a
+                  href={`#m-${entry.replyTo.id}`}
+                  className={`flex max-w-full items-center gap-1.5 truncate rounded-md border-l-2 border-zinc-300 bg-zinc-50 py-0.5 pl-2 pr-2.5 text-xs text-zinc-500 transition hover:bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-900/60 dark:text-zinc-400 dark:hover:bg-zinc-900 ${
+                    mine ? "flex-row-reverse text-right" : ""
                   }`}
                 >
-                  <p className="whitespace-pre-wrap break-words">
-                    {entry.body}
-                  </p>
+                  <span className="shrink-0 font-medium">
+                    {entry.replyTo.authorName}
+                  </span>
+                  <span className="truncate">{entry.replyTo.excerpt}</span>
+                </a>
+              )}
+
+              {entry.body && (
+                <div
+                  className={`flex w-full items-center gap-1.5 ${
+                    mine ? "flex-row-reverse" : ""
+                  }`}
+                >
+                  <div
+                    className={`w-fit max-w-full rounded-2xl px-3.5 py-2 text-sm ${
+                      mine
+                        ? "rounded-br-sm bg-indigo-600 text-white"
+                        : "rounded-bl-sm bg-zinc-100 text-zinc-800 dark:bg-zinc-900 dark:text-zinc-200"
+                    }`}
+                  >
+                    <p className="whitespace-pre-wrap break-words">
+                      {entry.body}
+                    </p>
+                  </div>
+                  {onReply && (
+                    <ReplyButton onClick={() => onReply(entry)} />
+                  )}
                 </div>
               )}
 
@@ -250,8 +372,17 @@ function Messages({
                   — which is exactly what happened to the first Medal clip
                   posted here. */}
               {entry.attachments.length > 0 && (
-                <div className="w-[26rem] max-w-full">
-                  <AttachmentView urls={entry.attachments} />
+                <div
+                  className={`flex w-full items-center gap-1.5 ${
+                    mine ? "flex-row-reverse" : ""
+                  }`}
+                >
+                  <div className="w-[26rem] max-w-full">
+                    <AttachmentView urls={entry.attachments} />
+                  </div>
+                  {onReply && !entry.body && (
+                    <ReplyButton onClick={() => onReply(entry)} />
+                  )}
                 </div>
               )}
             </div>
@@ -259,6 +390,34 @@ function Messages({
         );
       })}
     </ol>
+  );
+}
+
+/** Only visible on hover (and always for keyboard focus), so forty
+ * messages don't come with forty buttons competing for attention. */
+function ReplyButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label="Reply to this message"
+      title="Reply"
+      className="shrink-0 rounded-md p-1 text-zinc-400 opacity-0 transition hover:bg-zinc-100 hover:text-zinc-700 focus-visible:opacity-100 group-hover/msg:opacity-100 dark:hover:bg-zinc-800 dark:hover:text-zinc-200"
+    >
+      <svg
+        aria-hidden
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.8}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="h-3.5 w-3.5"
+      >
+        <path d="M9 17 4 12l5-5" />
+        <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+      </svg>
+    </button>
   );
 }
 
@@ -380,7 +539,15 @@ function RemoveStage({
   );
 }
 
-function Composer({ reportId }: { reportId: string }) {
+function Composer({
+  reportId,
+  replyTo,
+  onClearReply,
+}: {
+  reportId: string;
+  replyTo: TimelineEntry | null;
+  onClearReply: () => void;
+}) {
   const router = useRouter();
   const [body, setBody] = useState("");
   const [attachments, setAttachments] = useState<string[]>([]);
@@ -397,7 +564,11 @@ function Composer({ reportId }: { reportId: string }) {
     const res = await fetch(`/api/reports/${reportId}/comments`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ body: body.trim(), attachments }),
+      body: JSON.stringify({
+        body: body.trim(),
+        attachments,
+        replyToId: replyTo?.id ?? null,
+      }),
     }).catch(() => null);
 
     setBusy(false);
@@ -412,6 +583,7 @@ function Composer({ reportId }: { reportId: string }) {
     setBody("");
     setAttachments([]);
     setShowAttach(false);
+    onClearReply();
     router.refresh();
   }
 
@@ -420,6 +592,24 @@ function Composer({ reportId }: { reportId: string }) {
       onSubmit={send}
       className="sticky bottom-0 flex flex-col gap-2 border-t border-zinc-200 bg-zinc-50 pb-2 pt-3 dark:border-zinc-800 dark:bg-black"
     >
+      {replyTo && (
+        <div className="flex items-center gap-2 rounded-md border-l-2 border-indigo-500 bg-zinc-100 py-1.5 pl-2.5 pr-2 text-xs dark:bg-zinc-900">
+          <span className="shrink-0 text-zinc-400">Replying to</span>
+          <span className="shrink-0 font-medium">{replyTo.authorName}</span>
+          <span className="min-w-0 flex-1 truncate text-zinc-500">
+            {replyTo.body.trim() || "(attachment)"}
+          </span>
+          <button
+            type="button"
+            onClick={onClearReply}
+            aria-label="Cancel reply"
+            className="shrink-0 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {showAttach && (
         <AttachmentFields urls={attachments} onChange={setAttachments} compact />
       )}

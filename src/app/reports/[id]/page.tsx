@@ -11,6 +11,7 @@ import { listCategories, listTags, tagsForReports } from "@/lib/bugTaxonomy";
 import {
   getReportParticipants,
   getReportTimeline,
+  getReportVersion,
   listStages,
 } from "@/lib/reports";
 import { currentAbsencesByMemberId } from "@/lib/activity";
@@ -21,6 +22,7 @@ import { ReportSettings } from "@/components/ReportSettings";
 import { ReportThread } from "@/components/ReportThread";
 import { ParticipantsPanel } from "@/components/ParticipantsPanel";
 import { ReportActions } from "@/components/ReportActions";
+import { ArchiveButton } from "@/components/ArchiveButton";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,8 @@ export default async function ReportDetailPage({
       description: bugReports.description,
       attachments: bugReports.attachments,
       createdAt: bugReports.createdAt,
+      completedAt: bugReports.completedAt,
+      archivedAt: bugReports.archivedAt,
       reporterId: bugReports.reporterId,
       categoryId: bugReports.categoryId,
       categoryName: bugCategories.name,
@@ -67,6 +71,7 @@ export default async function ReportDetailPage({
     ranks,
     away,
     roster,
+    version,
   ] = await Promise.all([
     getReportTimeline(id),
     listStages(id),
@@ -86,12 +91,14 @@ export default async function ReportDetailPage({
       .from(members)
       .where(and(isNull(members.deletedAt), isNull(members.parentMemberId)))
       .orderBy(asc(members.robloxUsername)),
+    getReportVersion(id),
   ]);
 
   const tags = tagsByReport.get(id) ?? [];
   const canTriage = live?.user ? hasAction(live.user, "reports.triage") : false;
   const canDelete = live?.user ? hasAction(live.user, "reports.delete") : false;
   const isAdmin = live?.user ? isFullAdmin(live.user) : false;
+  const locked = report.completedAt !== null;
 
   // A stage is a claim about where the work has got to, so it comes from
   // someone doing the work: whoever joined, whoever filed it, or an admin.
@@ -123,6 +130,20 @@ export default async function ReportDetailPage({
               {report.createdAt.toLocaleDateString()}
               {report.categoryName && ` · ${report.categoryName}`}
             </p>
+            {(locked || report.archivedAt) && (
+              <p className="mt-1 flex flex-wrap items-center gap-2 text-xs">
+                {locked && (
+                  <span className="rounded-full bg-zinc-200 px-2 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                    Locked
+                  </span>
+                )}
+                {report.archivedAt && (
+                  <span className="rounded-full bg-zinc-200 px-2 py-0.5 font-medium text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300">
+                    Archived
+                  </span>
+                )}
+              </p>
+            )}
             {tags.length > 0 && (
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {tags.map((t) => (
@@ -136,6 +157,12 @@ export default async function ReportDetailPage({
               things you do TO a report, out of the way of the report. */}
           <div className="flex shrink-0 flex-col items-end gap-2">
             {canDelete && <ReportActions reportId={report.id} />}
+            {canTriage && (
+              <ArchiveButton
+                reportId={report.id}
+                archived={report.archivedAt !== null}
+              />
+            )}
             {canTriage && (
               <ReportSettings
                 reportId={report.id}
@@ -169,6 +196,8 @@ export default async function ReportDetailPage({
             canReply={Boolean(me)}
             canAddStage={canAddStage}
             canRemoveStage={isAdmin}
+            locked={locked}
+            version={version}
           />
         </div>
 
@@ -179,7 +208,7 @@ export default async function ReportDetailPage({
           awayMemberIds={[...away.keys()]}
           meMemberId={me?.id ?? null}
           serverNow={nowMs()}
-          canManage={isAdmin}
+          canManage={isAdmin && !locked}
           roster={roster.map((m) => ({
             id: m.id,
             name: displayNameFor(m),

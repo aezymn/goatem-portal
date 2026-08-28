@@ -69,6 +69,7 @@ export const RANK_ACTIONS = [
   "reports.triage",
   "reports.delete",
   "roster.manage",
+  "bugsetup.manage",
 ] as const;
 
 export type RankAction = (typeof RANK_ACTIONS)[number];

@@ -6,7 +6,7 @@ import { requireRosterMember } from "@/lib/requireSession";
 import { isFullAdmin } from "@/lib/permissions";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
-import { joinReport, leaveReport } from "@/lib/reports";
+import { getReportLockState, joinReport, leaveReport } from "@/lib/reports";
 import { addParticipantSchema } from "@/lib/validation";
 
 /**
@@ -104,6 +104,13 @@ export async function POST(
     return NextResponse.json({ error: "report not found" }, { status: 404 });
   }
 
+  if ((await getReportLockState(id)).locked) {
+    return NextResponse.json(
+      { error: "This report is complete and locked." },
+      { status: 409 }
+    );
+  }
+
   const target = await targetMemberId(
     request,
     member.id,
@@ -135,6 +142,13 @@ export async function DELETE(
 
   const { member, response } = await actorFor(discordId);
   if (!member) return response;
+
+  if ((await getReportLockState(id)).locked) {
+    return NextResponse.json(
+      { error: "This report is complete and locked." },
+      { status: 409 }
+    );
+  }
 
   const target = await targetMemberId(
     request,

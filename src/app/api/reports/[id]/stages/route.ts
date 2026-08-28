@@ -6,7 +6,7 @@ import { requireRosterMember } from "@/lib/requireSession";
 import { isFullAdmin } from "@/lib/permissions";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
-import { addStage, isParticipant } from "@/lib/reports";
+import { addStage, getReportLockState, isParticipant } from "@/lib/reports";
 import { createStageSchema } from "@/lib/validation";
 
 /**
@@ -41,6 +41,13 @@ export async function POST(
     .limit(1);
   if (!report) {
     return NextResponse.json({ error: "report not found" }, { status: 404 });
+  }
+
+  if ((await getReportLockState(id)).locked) {
+    return NextResponse.json(
+      { error: "This report is complete and locked." },
+      { status: 409 }
+    );
   }
 
   const allowed =

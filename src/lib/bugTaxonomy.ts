@@ -88,6 +88,7 @@ export async function listTags() {
       name: bugTags.name,
       tone: bugTags.tone,
       position: bugTags.position,
+      locksReport: bugTags.locksReport,
       groupId: bugTags.groupId,
       groupName: bugTagGroups.name,
       groupExclusive: bugTagGroups.exclusive,
@@ -131,11 +132,18 @@ export async function createCategory(name: string) {
 export async function createTag(
   name: string,
   tone: TagTone,
-  groupId: string | null
+  groupId: string | null,
+  locksReport = false
 ) {
   const [row] = await db
     .insert(bugTags)
-    .values({ name, tone, groupId, position: await nextPosition(bugTags) })
+    .values({
+      name,
+      tone,
+      groupId,
+      locksReport,
+      position: await nextPosition(bugTags),
+    })
     .returning();
   return row;
 }
@@ -149,7 +157,12 @@ export async function renameCategory(id: string, name: string) {
 
 export async function updateTag(
   id: string,
-  changes: { name?: string; tone?: TagTone; groupId?: string | null }
+  changes: {
+    name?: string;
+    tone?: TagTone;
+    groupId?: string | null;
+    locksReport?: boolean;
+  }
 ) {
   await db
     .update(bugTags)
@@ -193,7 +206,7 @@ export async function reorder(
 export async function tagsForReports(reportIds: string[]) {
   const byReport = new Map<
     string,
-    { id: string; name: string; tone: string }[]
+    { id: string; name: string; tone: string; locksReport: boolean }[]
   >();
   if (reportIds.length === 0) return byReport;
 
@@ -203,6 +216,7 @@ export async function tagsForReports(reportIds: string[]) {
       id: bugTags.id,
       name: bugTags.name,
       tone: bugTags.tone,
+      locksReport: bugTags.locksReport,
       position: bugTags.position,
     })
     .from(bugReportTags)
@@ -212,7 +226,12 @@ export async function tagsForReports(reportIds: string[]) {
 
   for (const row of rows) {
     const list = byReport.get(row.bugReportId) ?? [];
-    list.push({ id: row.id, name: row.name, tone: row.tone });
+    list.push({
+      id: row.id,
+      name: row.name,
+      tone: row.tone,
+      locksReport: row.locksReport,
+    });
     byReport.set(row.bugReportId, list);
   }
   return byReport;
@@ -238,6 +257,7 @@ export async function setReportTags(reportId: string, tagIds: string[]) {
           .select({
             id: bugTags.id,
             groupId: bugTags.groupId,
+            locksReport: bugTags.locksReport,
             exclusive: bugTagGroups.exclusive,
           })
           .from(bugTags)
@@ -256,7 +276,9 @@ export async function setReportTags(reportId: string, tagIds: string[]) {
     if (row.exclusive && row.groupId) chosen.set(row.groupId, row.id);
     else if (!free.includes(row.id)) free.push(row.id);
   }
-  const known = [...free, ...chosen.values()].map((id) => ({ id }));
+  const keptIds = [...free, ...chosen.values()];
+  const known = keptIds.map((id) => ({ id }));
+  const closes = keptIds.some((id) => byId.get(id)?.locksReport);
 
   await db.transaction(async (tx) => {
     await tx
@@ -267,8 +289,31 @@ export async function setReportTags(reportId: string, tagIds: string[]) {
         .insert(bugReportTags)
         .values(known.map((t) => ({ bugReportId: reportId, tagId: t.id })));
     }
+
+    // completedAt is the lock AND the archive clock, so it's set and
+    // cleared in the same transaction as the tags that decide it — the
+    // two can never disagree about whether a report is closed. An
+    // already-completed report keeps its original date rather than having
+    // the 30-day clock restarted by an unrelated tag edit.
+    const [current] = await tx
+      .select({ completedAt: bugReports.completedAt })
+      .from(bugReports)
+      .where(eq(bugReports.id, reportId))
+      .limit(1);
+
+    if (closes && !current?.completedAt) {
+      await tx
+        .update(bugReports)
+        .set({ completedAt: new Date() })
+        .where(eq(bugReports.id, reportId));
+    } else if (!closes && current?.completedAt) {
+      await tx
+        .update(bugReports)
+        .set({ completedAt: null, archivedAt: null })
+        .where(eq(bugReports.id, reportId));
+    }
   });
-  return known.map((t) => t.id);
+  return keptIds;
 }
 
 export async function categoryExists(id: string): Promise<boolean> {

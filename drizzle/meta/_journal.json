@@ -85,6 +85,13 @@
       "when": 1787922076742,
       "tag": "0011_stages_and_tag_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1787942626169,
+      "tag": "0012_replies_locking_and_archive",
+      "breakpoints": true
     }
   ]
 }

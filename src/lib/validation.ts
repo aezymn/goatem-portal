@@ -48,6 +48,9 @@ export const createCommentSchema = z.object({
   // words is a perfectly good contribution to the thread.
   body: z.string().trim().max(2000).optional().default(""),
   attachments,
+  // The message this answers. Checked against the same report by the
+  // route, so a reply can't be pointed at a comment from another thread.
+  replyToId: z.string().trim().max(64).nullable().optional(),
 }).refine((d) => d.body.length > 0 || (d.attachments?.length ?? 0) > 0, {
   message: "Write something or attach a link",
 });
@@ -64,6 +67,8 @@ export const createTagSchema = z.object({
   name: z.string().trim().min(1, "Give the tag a name").max(40),
   tone: z.enum([...TAG_TONES] as [string, ...string[]]).optional(),
   groupId: z.string().trim().max(64).nullable().optional(),
+  // Applying this tag closes and locks the report.
+  locksReport: z.boolean().optional(),
 });
 
 export const createTagGroupSchema = z.object({
@@ -98,10 +103,14 @@ export const updateTagSchema = z
     name: z.string().trim().min(1).max(40).optional(),
     tone: z.enum([...TAG_TONES] as [string, ...string[]]).optional(),
     groupId: z.string().trim().max(64).nullable().optional(),
+    locksReport: z.boolean().optional(),
   })
   .refine(
     (d) =>
-      d.name !== undefined || d.tone !== undefined || d.groupId !== undefined,
+      d.name !== undefined ||
+      d.tone !== undefined ||
+      d.groupId !== undefined ||
+      d.locksReport !== undefined,
     { message: "Nothing to update" }
   );
 

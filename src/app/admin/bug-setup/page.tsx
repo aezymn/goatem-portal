@@ -1,3 +1,7 @@
+import { redirect } from "next/navigation";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { hasAction } from "@/lib/permissions";
 import {
   listCategories,
   listTagGroups,
@@ -8,6 +12,15 @@ import { BugTaxonomyBoard } from "@/components/BugTaxonomyBoard";
 export const dynamic = "force-dynamic";
 
 export default async function BugSetupPage() {
+  // Managing these is a rank-grantable action now, not admin-only — so
+  // the page checks the action itself rather than relying on /admin's
+  // blanket gate, which would otherwise keep out a rank that has it.
+  const session = await getServerSession(authOptions);
+  const live = session && !session.stale ? session : null;
+  if (!live?.user || !hasAction(live.user, "bugsetup.manage")) {
+    redirect("/access-denied");
+  }
+
   const [categories, groups, tags] = await Promise.all([
     listCategories(),
     listTagGroups(),

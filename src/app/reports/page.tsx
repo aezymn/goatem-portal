@@ -3,11 +3,13 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { bugCategories, bugReports, members } from "@/db/schema";
-import { asc, desc, eq, isNull, sql } from "drizzle-orm";
-import { tagsForReports } from "@/lib/bugTaxonomy";
+import { and, asc, desc, eq, exists, isNotNull, isNull, sql } from "drizzle-orm";
+import { bugReportTags } from "@/db/schema";
+import { listTags, tagsForReports } from "@/lib/bugTaxonomy";
 import { getMemberByDiscordId } from "@/lib/members";
 import { joinedReportIds } from "@/lib/reports";
 import { TagChip } from "@/components/TagChip";
+import { ReportFilters } from "@/components/ReportFilters";
 
 // This page reads straight from the database (not via fetch()), which
 // Next's static-vs-dynamic heuristics don't automatically detect — without
@@ -16,7 +18,18 @@ import { TagChip } from "@/components/TagChip";
 // production build, not assumed.
 export const dynamic = "force-dynamic";
 
-export default async function ReportsPage() {
+export default async function ReportsPage({
+  searchParams,
+}: PageProps<"/reports">) {
+  const params = await searchParams;
+  const raw = params.tag;
+  // Several ?tag= values narrow the list to reports carrying ALL of them,
+  // which is what picking two filters visibly means.
+  const tagFilter = (Array.isArray(raw) ? raw : raw ? [raw] : []).filter(
+    (t) => typeof t === "string" && t.length > 0
+  );
+  const showArchived = params.archived === "1";
+
   const session = await getServerSession(authOptions);
   const live = session && !session.stale ? session : null;
   const me = live?.user?.discordId
@@ -56,10 +69,36 @@ export default async function ReportsPage() {
     .from(bugReports)
     .innerJoin(members, eq(bugReports.reporterId, members.id))
     .leftJoin(bugCategories, eq(bugReports.categoryId, bugCategories.id))
-    .where(isNull(bugReports.deletedAt))
+    .where(
+      and(
+        isNull(bugReports.deletedAt),
+        // Archived reports are out of the way by default, not gone.
+        showArchived
+          ? isNotNull(bugReports.archivedAt)
+          : isNull(bugReports.archivedAt),
+        // One EXISTS per selected tag, so the filters compose as AND
+        // rather than "has any of these".
+        ...tagFilter.map((tagId) =>
+          exists(
+            db
+              .select({ one: sql`1` })
+              .from(bugReportTags)
+              .where(
+                and(
+                  eq(bugReportTags.bugReportId, bugReports.id),
+                  eq(bugReportTags.tagId, tagId)
+                )
+              )
+          )
+        )
+      )
+    )
     .orderBy(asc(bugCategories.position), desc(bugReports.createdAt));
 
-  const tags = await tagsForReports(rows.map((r) => r.id));
+  const [tags, allTags] = await Promise.all([
+    tagsForReports(rows.map((r) => r.id)),
+    listTags(),
+  ]);
 
   // Grouped by category in the order an admin arranged them, with
   // uncategorised reports last — they're the ones needing attention, not
@@ -87,9 +126,17 @@ export default async function ReportsPage() {
         </Link>
       </div>
 
+      <ReportFilters
+        allTags={allTags}
+        selected={tagFilter}
+        showArchived={showArchived}
+      />
+
       {rows.length === 0 ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
-          No reports yet. Nice.
+          {tagFilter.length > 0 || showArchived
+            ? "Nothing matches that."
+            : "No reports yet. Nice."}
         </p>
       ) : (
         ordered.map(([category, reports]) => (

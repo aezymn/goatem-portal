@@ -12,6 +12,7 @@ export interface TaxonomyEntry {
   tone?: string;
   groupId?: string | null;
   exclusive?: boolean;
+  locksReport?: boolean;
 }
 
 type Kind = "categories" | "tags" | "groups";
@@ -32,7 +33,8 @@ const COPY: Record<Kind, { title: string; blurb: string; add: string; placeholde
   },
   tags: {
     title: "Tags",
-    blurb: "The labels themselves. Each one can belong to a type.",
+    blurb:
+      "The labels themselves. Each belongs to a type, and one marked \u201ccloses\u201d locks the report and starts its 30-day archive clock when applied.",
     add: "Add tag",
     placeholder: "Needs repro",
   },
@@ -181,6 +183,29 @@ export function BugTaxonomyBoard({
                   <TagChip tag={{ name: entry.name, tone: entry.tone ?? "zinc" }} />
                 ) : (
                   <span className="text-sm font-medium">{entry.name}</span>
+                )}
+
+                {kind === "tags" && (
+                  <label
+                    className="flex items-center gap-1 text-xs text-zinc-500"
+                    title="Applying this tag closes the report: the thread locks and the 30-day archive clock starts."
+                  >
+                    <input
+                      type="checkbox"
+                      checked={entry.locksReport ?? false}
+                      disabled={busy}
+                      onChange={(e) =>
+                        call(`/api/admin/bug-taxonomy/tags/${entry.id}`, {
+                          method: "PATCH",
+                          headers: { "content-type": "application/json" },
+                          body: JSON.stringify({
+                            locksReport: e.target.checked,
+                          }),
+                        })
+                      }
+                    />
+                    closes
+                  </label>
                 )}
 
                 {kind === "groups" && (
