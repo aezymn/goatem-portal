@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { DiscordNameCell } from "@/components/DiscordNameCell";
 import { YesNoUnknown, NotApplicable } from "@/components/RosterStatusCell";
+import { PresenceCell, useNow } from "@/components/PresenceCell";
 import { DeleteMemberButton } from "@/components/DeleteMemberButton";
 import type { Region } from "@/lib/regions";
 
@@ -20,6 +21,10 @@ export interface RosterMember {
   awayUntil: string | null;
   hasGameAccess: boolean | null;
   hasSignedIn: boolean;
+  /** ISO timestamps for the activity column — see src/lib/presence.ts. */
+  lastSeenAt: string | null;
+  lastActiveAt: string | null;
+  lastSignInAt: string | null;
   isPortalAdmin: boolean;
   isCreator: boolean;
   isAlt: boolean;
@@ -33,10 +38,16 @@ export interface RosterGroup {
 export function RosterGroups({
   groups,
   canManage,
+  serverNow,
 }: {
   groups: RosterGroup[];
   canManage: boolean;
+  /** The server's clock at render time. The activity column then ticks
+   * on the browser's own clock, so "Online" decays by itself on a page
+   * that's been left open. */
+  serverNow: number;
 }) {
+  const now = useNow(serverNow);
   // Collapsed rather than expanded is tracked, so a rank added later
   // starts open rather than mysteriously hidden.
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -122,8 +133,8 @@ export function RosterGroups({
                 <span className="flex w-[112px] justify-end">
                   Game access
                 </span>
-                <span className="flex w-[104px] justify-end">
-                  Signed in
+                <span className="flex w-[128px] justify-end">
+                  Last active
                 </span>
                 {canManage && <span aria-hidden className="w-7" />}
               </span>
@@ -214,16 +225,11 @@ export function RosterGroups({
                           <NotApplicable title="No Roblox account linked yet, so there's nothing to check" />
                         )}
                       </span>
-                      <span className="hidden w-[104px] justify-end sm:flex">
+                      <span className="hidden w-[128px] justify-end sm:flex">
                         {m.isAlt ? (
                           <NotApplicable title="Alt accounts don't sign in — the person who owns this one does" />
                         ) : (
-                          <YesNoUnknown
-                            value={m.hasSignedIn}
-                            yes="Signed in"
-                            no="Never"
-                            unknown="Never"
-                          />
+                          <PresenceCell member={m} now={now} />
                         )}
                       </span>
                       {canManage && (

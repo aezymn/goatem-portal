@@ -8,6 +8,7 @@ import { isRobloxGroupConfigured } from "@/lib/roblox";
 import { listRanksWithActions } from "@/lib/ranks";
 import { currentAbsencesByMemberId } from "@/lib/activity";
 import { asRegion } from "@/lib/regions";
+import { nowMs } from "@/lib/presence";
 import { AddMemberForm } from "@/components/AddMemberForm";
 import { RosterToolbar } from "@/components/RosterToolbar";
 import { LinkRobloxPanel } from "@/components/LinkRobloxPanel";
@@ -62,6 +63,11 @@ export default async function RosterPage() {
       rank: m.rank,
       hasGameAccess: m.hasGameAccess,
       hasSignedIn: m.hasSignedIn,
+      // Serialised for the client component, which turns them into
+      // Online / Away / Active 3h ago on a ticking clock.
+      lastSeenAt: m.lastSeenAt?.toISOString() ?? null,
+      lastActiveAt: m.lastActiveAt?.toISOString() ?? null,
+      lastSignInAt: m.lastSignInAt?.toISOString() ?? null,
       isPortalAdmin: m.isPortalAdmin,
       isCreator: isCreatorDiscordId(m.discordId ?? undefined),
       isAlt: Boolean(m.parentMemberId),
@@ -126,7 +132,11 @@ export default async function RosterPage() {
         </p>
       )}
 
-      <RosterGroups groups={groups} canManage={canManageRoster} />
+      <RosterGroups
+        groups={groups}
+        canManage={canManageRoster}
+        serverNow={nowMs()}
+      />
 
       {me && (
         <LinkRobloxPanel

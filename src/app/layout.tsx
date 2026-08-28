@@ -4,6 +4,7 @@ import "./globals.css";
 import { authOptions } from "@/lib/auth";
 import { Providers } from "@/components/Providers";
 import { Sidebar } from "@/components/Sidebar";
+import { PresenceBeacon } from "@/components/PresenceBeacon";
 
 export const metadata: Metadata = {
   title: "Quality Assurance — Goatem Studios",
@@ -16,6 +17,7 @@ export default async function RootLayout({ children }: LayoutProps<"/">) {
     <html lang="en" className="h-full antialiased">
       <body className="min-h-full bg-zinc-50 dark:bg-black">
         <Providers session={session}>
+          <PresenceBeacon />
           <Sidebar />
           {/* The sidebar is fixed, so the content is offset rather than
               sharing a flex row — that keeps it in place while the page

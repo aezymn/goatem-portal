@@ -8,6 +8,7 @@ import {
 } from "@/lib/activity";
 import { isCreatorDiscordId } from "@/lib/permissions";
 import { asRegion } from "@/lib/regions";
+import { presenceFor } from "@/lib/presence";
 import { StatusBadge } from "@/components/StatusBadge";
 
 export const dynamic = "force-dynamic";
@@ -42,6 +43,16 @@ export default async function MemberProfilePage({
   const currentAbsence = activity.absences.find(
     (a) => a.leaveDate <= today && a.returnDate > today
   );
+  // A snapshot rather than the roster's ticking clock: a profile is a
+  // page you open, read, and leave.
+  const presence = presenceFor(
+    {
+      hasSignedIn: member.hasSignedIn,
+      lastSeenAt: member.lastSeenAt?.toISOString() ?? null,
+      lastActiveAt: member.lastActiveAt?.toISOString() ?? null,
+      lastSignInAt: member.lastSignInAt?.toISOString() ?? null,
+    }
+  );
 
   return (
     <div className="flex flex-col gap-6">
@@ -72,6 +83,7 @@ export default async function MemberProfilePage({
           <p className="mt-1 text-sm text-zinc-500">
             {member.rank}
             {member.discordUsername && ` · ${member.discordUsername}`}
+            {!member.parentMemberId && ` · ${presence.label.toLowerCase()}`}
             {currentAbsence &&
               ` · back ${shortDate(currentAbsence.returnDate)}`}
           </p>

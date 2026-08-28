@@ -134,6 +134,15 @@ export const members = pgTable(
     // distinct from being on the roster, which now happens without them.
     hasSignedIn: boolean("has_signed_in").notNull().default(false),
     lastSignInAt: timestamp("last_sign_in_at", { withTimezone: true }),
+    // Presence, kept as two separate facts because "away" needs both.
+    // lastSeenAt is the last heartbeat from an open, visible tab; it says
+    // the portal is in front of them. lastActiveAt is the last time they
+    // actually did something — moved, typed, clicked, changed page.
+    // Fresh seen + stale active is exactly what AFK-on-the-site means,
+    // and one column alone can't tell that apart from having closed the
+    // tab. See src/lib/presence.ts.
+    lastSeenAt: timestamp("last_seen_at", { withTimezone: true }),
+    lastActiveAt: timestamp("last_active_at", { withTimezone: true }),
     // Roblox group membership => can they get into the game. Null means
     // "not checked yet" and is deliberately distinct from false ("checked,
     // and they can't") — the roster shows those differently.
