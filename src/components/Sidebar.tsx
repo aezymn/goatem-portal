@@ -12,43 +12,40 @@ interface Me {
   roleColorHex: string | null;
 }
 
+import {
+  Bug,
+  Users,
+  CalendarOff,
+  FlaskConical,
+  ScrollText,
+  ShieldAlert,
+  Settings,
+  UserCog,
+  History,
+  FileClock,
+  Menu,
+} from "lucide-react";
+
 interface NavItem {
   href: string;
   label: string;
   icon: React.ReactNode;
 }
 
-// Icons are inline rather than a dependency: six small paths don't justify
-// pulling in an icon library, and inlining means no extra request.
-const icon = (d: string) => (
-  <svg
-    aria-hidden
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth={1.8}
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    className="h-4 w-4 shrink-0"
-  >
-    <path d={d} />
-  </svg>
-);
-
 const MAIN_NAV: NavItem[] = [
-  { href: "/reports", label: "Bug Reports", icon: icon("M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z") },
-  { href: "/roster", label: "Roster", icon: icon("M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75") },
-  { href: "/absence", label: "Report Absence", icon: icon("M8 2v4M16 2v4M3 10h18M5 4h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2Z") },
-  { href: "/testing", label: "Report Testing", icon: icon("M9 2v6L4.6 16.4A2 2 0 0 0 6.3 19.5h11.4a2 2 0 0 0 1.7-3.1L15 8V2M9 2h6M7.5 14h9") },
-  { href: "/changelog", label: "Change Log", icon: icon("M12 8v4l3 2M3 12a9 9 0 1 0 18 0 9 9 0 0 0-18 0Z") },
+  { href: "/reports", label: "Bug Reports", icon: <Bug className="h-4 w-4 shrink-0" /> },
+  { href: "/roster", label: "Roster", icon: <Users className="h-4 w-4 shrink-0" /> },
+  { href: "/absence", label: "Report Absence", icon: <CalendarOff className="h-4 w-4 shrink-0" /> },
+  { href: "/testing", label: "Report Testing", icon: <FlaskConical className="h-4 w-4 shrink-0" /> },
+  { href: "/changelog", label: "Change Log", icon: <ScrollText className="h-4 w-4 shrink-0" /> },
 ];
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/admin/ranks", label: "Ranks", icon: icon("M4 20V10M12 20V4M20 20v-6") },
-  { href: "/admin/bug-setup", label: "Bug setup", icon: icon("M7 8h10M7 12h6M4 6a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H9l-5 4Z") },
-  { href: "/admin/admins", label: "Admin Access", icon: icon("M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z") },
-  { href: "/changelog/manage", label: "Change log posts", icon: icon("M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z") },
-  { href: "/admin/audit-log", label: "Audit Log", icon: icon("M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M9 13h6M9 17h6") },
+  { href: "/admin/ranks", label: "Ranks", icon: <ShieldAlert className="h-4 w-4 shrink-0" /> },
+  { href: "/admin/bug-setup", label: "Bug setup", icon: <Settings className="h-4 w-4 shrink-0" /> },
+  { href: "/admin/admins", label: "Admin Access", icon: <UserCog className="h-4 w-4 shrink-0" /> },
+  { href: "/changelog/manage", label: "Change log posts", icon: <History className="h-4 w-4 shrink-0" /> },
+  { href: "/admin/audit-log", label: "Audit Log", icon: <FileClock className="h-4 w-4 shrink-0" /> },
 ];
 
 export function Sidebar() {
@@ -106,9 +103,7 @@ export function Sidebar() {
           aria-expanded={mobileOpen}
           className="rounded-md p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-900"
         >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" className="h-5 w-5">
-            <path d="M4 7h16M4 12h16M4 17h16" />
-          </svg>
+          <Menu className="h-5 w-5" />
         </button>
         <Brand />
       </div>
@@ -229,6 +224,9 @@ function Section({
   );
 }
 
+import * as DropdownMenu from "@radix-ui/react-dropdown-menu";
+import { LogOut, ChevronsUpDown } from "lucide-react";
+
 function UserChip({
   session,
   me,
@@ -236,82 +234,61 @@ function UserChip({
   session: NonNullable<ReturnType<typeof useSession>["data"]>;
   me: Me | null;
 }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function onClickOutside(e: MouseEvent) {
-      if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", onClickOutside);
-    return () => document.removeEventListener("mousedown", onClickOutside);
-  }, []);
-
   const displayName = me?.robloxUsername ?? session.user.name ?? "Signed in";
-  // The roster's organisation rank, not the permission model — see
-  // src/lib/permissions.ts for why those are separate things.
   const rankLabel = me?.rank ?? "Not on roster yet";
 
   return (
-    <div className="relative" ref={menuRef}>
-      {menuOpen && (
-        <div className="glass absolute bottom-full left-0 z-10 mb-2 w-full rounded-md border border-zinc-200/50 py-1 shadow-xl dark:border-zinc-800/50">
-          <button
-            onClick={() => signOut()}
-            className="block w-full px-3 py-2 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"
-          >
-            Sign out
-          </button>
-        </div>
-      )}
+    <DropdownMenu.Root>
+      <DropdownMenu.Trigger asChild>
+        <button className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left outline-none transition hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-indigo-500 dark:hover:bg-zinc-900">
+          {me?.avatarUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element -- bot-sourced Discord CDN avatar
+            <img
+              src={me.avatarUrl}
+              alt=""
+              className="h-9 w-9 shrink-0 rounded-full object-cover"
+            />
+          ) : (
+            <div className="h-9 w-9 shrink-0 rounded-full bg-zinc-200 dark:bg-zinc-800" />
+          )}
 
-      <button
-        onClick={() => setMenuOpen((v) => !v)}
-        aria-expanded={menuOpen}
-        className="flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition hover:bg-zinc-100 dark:hover:bg-zinc-900"
-      >
-        {me?.avatarUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- bot-sourced Discord CDN avatar
-          <img
-            src={me.avatarUrl}
-            alt=""
-            className="h-9 w-9 shrink-0 rounded-full object-cover"
-          />
-        ) : (
-          <div className="h-9 w-9 shrink-0 rounded-full bg-zinc-200 dark:bg-zinc-800" />
-        )}
-
-        <span className="flex min-w-0 flex-col gap-0.5 leading-none">
-          <span className="truncate text-sm">{displayName}</span>
-          <span className="flex items-center gap-1">
-            {session.user.isCreator && (
-              <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
-                Creator
+          <span className="flex min-w-0 flex-col gap-0.5 leading-none">
+            <span className="truncate text-sm font-medium">{displayName}</span>
+            <span className="flex items-center gap-1">
+              {session.user.isCreator && (
+                <span className="rounded-full bg-emerald-100 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400">
+                  Creator
+                </span>
+              )}
+              <span
+                className="truncate rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                style={{ color: me?.roleColorHex ?? undefined }}
+              >
+                {rankLabel}
               </span>
-            )}
-            <span
-              className="truncate rounded-full bg-zinc-200 px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
-              style={{ color: me?.roleColorHex ?? undefined }}
-            >
-              {rankLabel}
             </span>
           </span>
-        </span>
 
-        <svg
-          aria-hidden
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          className="ml-auto h-4 w-4 shrink-0 text-zinc-400"
+          <ChevronsUpDown className="ml-auto h-4 w-4 shrink-0 text-zinc-400" />
+        </button>
+      </DropdownMenu.Trigger>
+
+      <DropdownMenu.Portal>
+        <DropdownMenu.Content
+          align="start"
+          side="top"
+          sideOffset={8}
+          className="z-50 min-w-[240px] overflow-hidden rounded-lg border border-zinc-200 bg-white p-1 shadow-lg animate-in fade-in zoom-in-95 dark:border-zinc-800 dark:bg-zinc-950"
         >
-          <path d="M4 7h16M4 12h16M4 17h16" />
-        </svg>
-      </button>
-    </div>
+          <DropdownMenu.Item
+            onSelect={() => signOut()}
+            className="flex cursor-pointer items-center gap-2 rounded-md px-2 py-1.5 text-sm text-red-600 outline-none hover:bg-red-50 focus:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/50 dark:focus:bg-red-950/50"
+          >
+            <LogOut className="h-4 w-4" />
+            <span>Sign out</span>
+          </DropdownMenu.Item>
+        </DropdownMenu.Content>
+      </DropdownMenu.Portal>
+    </DropdownMenu.Root>
   );
 }

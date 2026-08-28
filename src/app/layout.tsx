@@ -6,6 +6,9 @@ import { Providers } from "@/components/Providers";
 import { Sidebar } from "@/components/Sidebar";
 import { PresenceBeacon } from "@/components/PresenceBeacon";
 import { Toaster } from "sonner";
+import { GeistSans } from "geist/font/sans";
+import { GeistMono } from "geist/font/mono";
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Quality Assurance — Goatem Studios",
@@ -15,8 +18,8 @@ export const metadata: Metadata = {
 export default async function RootLayout({ children }: LayoutProps<"/">) {
   const session = await getServerSession(authOptions);
   return (
-    <html lang="en" className="h-full antialiased">
-      <body className="min-h-full mesh-bg text-zinc-900 dark:text-zinc-100">
+    <html lang="en" className={cn("h-full antialiased", GeistSans.variable, GeistMono.variable)}>
+      <body className="min-h-full bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 selection:bg-indigo-500/30">
         <Providers session={session}>
           <PresenceBeacon />
           <Sidebar />
