@@ -118,6 +118,11 @@ export const members = pgTable(
     // time someone opens the page.
     discordAvatarUrl: text("discord_avatar_url"),
     rank: text("rank").notNull(),
+    // "EU" | "NA" | "APAC", derived from Discord roles on each sync (see
+    // src/lib/regions.ts). Deliberately plain text rather than a pg enum:
+    // adding a fourth region should be a one-line config change, not a
+    // migration. Null means they hold no region role.
+    region: text("region"),
     notes: text("notes"),
     source: memberSourceEnum("source").notNull().default("manual"),
     // Set on alt/testing accounts, pointing at the roster row of the

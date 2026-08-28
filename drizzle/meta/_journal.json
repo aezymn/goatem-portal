@@ -50,6 +50,13 @@
       "when": 1787856335124,
       "tag": "0006_absences_and_test_logs",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1787856336124,
+      "tag": "0007_member_regions",
+      "breakpoints": true
     }
   ]
 }

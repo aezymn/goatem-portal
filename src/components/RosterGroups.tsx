@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { useState } from "react";
 import { DiscordNameCell } from "@/components/DiscordNameCell";
-import { YesNoUnknown } from "@/components/RosterStatusCell";
+import { YesNoUnknown, NotApplicable } from "@/components/RosterStatusCell";
 import { DeleteMemberButton } from "@/components/DeleteMemberButton";
+import type { Region } from "@/lib/regions";
 
 export interface RosterMember {
   id: string;
@@ -13,6 +14,10 @@ export interface RosterMember {
   discordUsername: string | null;
   discordAvatarUrl: string | null;
   rank: string;
+  region: Region | null;
+  /** The day they're next available, if a notice of absence covers today.
+   * Null for anyone who is around. */
+  awayUntil: string | null;
   hasGameAccess: boolean | null;
   hasSignedIn: boolean;
   isPortalAdmin: boolean;
@@ -98,13 +103,29 @@ export function RosterGroups({
               </span>
 
               <span
-                className={`ml-auto text-xs tabular-nums ${
+                className={`text-xs tabular-nums ${
                   allLinked
                     ? "text-emerald-600 dark:text-emerald-500"
                     : "text-zinc-400"
                 }`}
               >
                 {linked}/{group.members.length} linked
+              </span>
+
+              {/* The two status columns had no labels at all once the
+                  roster stopped being a <table> — the pills just floated
+                  at the right edge with nothing saying what they meant.
+                  Repeating the headings per group also means they're
+                  still on screen when you're scrolled deep into the
+                  roster. Widths are kept in step with the row below. */}
+              <span className="ml-auto hidden shrink-0 items-center gap-2 text-[10px] font-medium uppercase tracking-wider text-zinc-400 sm:flex dark:text-zinc-600">
+                <span className="flex w-[112px] justify-end">
+                  Game access
+                </span>
+                <span className="flex w-[104px] justify-end">
+                  Signed in
+                </span>
+                {canManage && <span aria-hidden className="w-7" />}
               </span>
             </button>
 
@@ -146,11 +167,26 @@ export function RosterGroups({
                         >
                           {m.robloxUsername ?? "not linked"}
                         </Link>
+                        {/* Order is priority order: who they are, then
+                            what they are, then where they are. */}
                         {m.isCreator && <Badge tone="emerald">Creator</Badge>}
                         {m.isPortalAdmin && !m.isCreator && (
                           <Badge tone="indigo">Admin</Badge>
                         )}
                         {m.isAlt && <Badge tone="zinc">Alt</Badge>}
+                        {m.awayUntil && (
+                          <Badge
+                            tone="amber"
+                            title={`On a notice of absence — back ${formatDay(
+                              m.awayUntil
+                            )}`}
+                          >
+                            NOA
+                          </Badge>
+                        )}
+                        {m.region && (
+                          <Badge tone="outline">{m.region}</Badge>
+                        )}
                       </span>
                       {!m.isAlt && m.discordId && (
                         <span className="text-xs text-zinc-500">
@@ -167,15 +203,21 @@ export function RosterGroups({
                         label lengths. */}
                     <div className="ml-auto flex shrink-0 items-center gap-2">
                       <span className="hidden w-[112px] justify-end sm:flex">
-                        <YesNoUnknown
-                          value={m.robloxUsername ? m.hasGameAccess : null}
-                          yes="In group"
-                          no="Not in group"
-                          unknown={m.robloxUsername ? "Unchecked" : "No account"}
-                        />
+                        {m.robloxUsername ? (
+                          <YesNoUnknown
+                            value={m.hasGameAccess}
+                            yes="In group"
+                            no="Not in group"
+                            unknown="Unchecked"
+                          />
+                        ) : (
+                          <NotApplicable title="No Roblox account linked yet, so there's nothing to check" />
+                        )}
                       </span>
                       <span className="hidden w-[104px] justify-end sm:flex">
-                        {!m.isAlt && (
+                        {m.isAlt ? (
+                          <NotApplicable title="Alt accounts don't sign in — the person who owns this one does" />
+                        ) : (
                           <YesNoUnknown
                             value={m.hasSignedIn}
                             yes="Signed in"
@@ -226,9 +268,11 @@ function Avatar({ url }: { url: string | null }) {
 
 function Badge({
   tone,
+  title,
   children,
 }: {
-  tone: "emerald" | "indigo" | "zinc";
+  tone: "emerald" | "indigo" | "zinc" | "amber" | "outline";
+  title?: string;
   children: React.ReactNode;
 }) {
   const tones = {
@@ -237,12 +281,29 @@ function Badge({
     indigo:
       "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
     zinc: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
+    amber:
+      "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400",
+    // Region is an attribute rather than a status, so it's outlined
+    // rather than filled — present without competing with the badges
+    // that mean something is true of the person right now.
+    outline:
+      "text-zinc-500 ring-1 ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700",
   };
   return (
     <span
+      title={title}
       className={`shrink-0 rounded-full px-1.5 py-px text-[10px] font-semibold uppercase tracking-wide ${tones[tone]}`}
     >
       {children}
     </span>
   );
+}
+
+/** "12 Sep" — short enough for a tooltip, unambiguous enough to plan
+ * around. */
+function formatDay(iso: string): string {
+  return new Date(`${iso}T00:00:00`).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+  });
 }

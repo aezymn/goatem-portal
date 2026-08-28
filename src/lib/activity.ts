@@ -8,14 +8,23 @@ export function todayIso(): string {
 }
 
 /**
- * Who is away right now. An absence covers leaveDate up to but NOT
- * including returnDate, because returnDate is the first day the person is
- * available again — so someone back "today" is not counted as away.
+ * Who is away right now, mapped to the day they're back. An absence
+ * covers leaveDate up to but NOT including returnDate, because
+ * returnDate is the first day the person is available again — so
+ * someone back "today" is not counted as away.
+ *
+ * Where two notices overlap, the later return date wins: what the roster
+ * wants to say is when this person is next actually around.
  */
-export async function currentlyAwayMemberIds(): Promise<Set<string>> {
+export async function currentAbsencesByMemberId(): Promise<
+  Map<string, string>
+> {
   const today = todayIso();
   const rows = await db
-    .select({ memberId: absences.memberId })
+    .select({
+      memberId: absences.memberId,
+      returnDate: absences.returnDate,
+    })
     .from(absences)
     .where(
       and(
@@ -24,7 +33,15 @@ export async function currentlyAwayMemberIds(): Promise<Set<string>> {
         sql`${absences.returnDate} > ${today}`
       )
     );
-  return new Set(rows.map((r) => r.memberId));
+
+  const byMember = new Map<string, string>();
+  for (const row of rows) {
+    const existing = byMember.get(row.memberId);
+    if (!existing || row.returnDate > existing) {
+      byMember.set(row.memberId, row.returnDate);
+    }
+  }
+  return byMember;
 }
 
 /** Everything one person has done, for their profile page. */
@@ -97,7 +114,7 @@ export async function getMemberById(id: string) {
 }
 
 /** Upcoming and current absences across everyone — the Absence page.
- * The cutoff is `returnDate > today`, matching currentlyAwayMemberIds:
+ * The cutoff is `returnDate > today`, matching currentAbsencesByMemberId:
  * someone whose return date IS today is available today, so their notice
  * belongs in the history, not on the board. */
 export async function listAbsences() {

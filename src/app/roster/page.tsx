@@ -6,6 +6,8 @@ import { asc, isNull } from "drizzle-orm";
 import { hasAction, isCreatorDiscordId } from "@/lib/permissions";
 import { isRobloxGroupConfigured } from "@/lib/roblox";
 import { listRanksWithActions } from "@/lib/ranks";
+import { currentAbsencesByMemberId } from "@/lib/activity";
+import { asRegion } from "@/lib/regions";
 import { AddMemberForm } from "@/components/AddMemberForm";
 import { RosterToolbar } from "@/components/RosterToolbar";
 import { LinkRobloxPanel } from "@/components/LinkRobloxPanel";
@@ -27,13 +29,14 @@ export default async function RosterPage() {
     : false;
   const myDiscordId = live?.user?.discordId ?? null;
 
-  const [rows, ranks] = await Promise.all([
+  const [rows, ranks, awayUntil] = await Promise.all([
     db
       .select()
       .from(members)
       .where(isNull(members.deletedAt))
       .orderBy(asc(members.robloxUsername), asc(members.discordUsername)),
     listRanksWithActions(),
+    currentAbsencesByMemberId(),
   ]);
 
   // Rank authority order comes from the Ranks page, not the alphabet —
@@ -62,6 +65,10 @@ export default async function RosterPage() {
       isPortalAdmin: m.isPortalAdmin,
       isCreator: isCreatorDiscordId(m.discordId ?? undefined),
       isAlt: Boolean(m.parentMemberId),
+      region: asRegion(m.region),
+      // An alt is the same human as its owner, so the absence tag goes on
+      // the owner's row only rather than repeating down the group.
+      awayUntil: m.parentMemberId ? null : (awayUntil.get(m.id) ?? null),
     };
   }
 
@@ -104,6 +111,7 @@ export default async function RosterPage() {
           <p className="mt-1 text-sm text-zinc-500">
             {total} on the roster · {linked} linked · {signedIn} signed in
             {isRobloxGroupConfigured() && ` · ${withAccess} in the group`}
+            {awayUntil.size > 0 && ` · ${awayUntil.size} away`}
           </p>
         </div>
         {canManageRoster && (

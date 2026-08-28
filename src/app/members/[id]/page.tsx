@@ -7,6 +7,7 @@ import {
   todayIso,
 } from "@/lib/activity";
 import { isCreatorDiscordId } from "@/lib/permissions";
+import { asRegion } from "@/lib/regions";
 import { StatusBadge } from "@/components/StatusBadge";
 
 export const dynamic = "force-dynamic";
@@ -63,7 +64,10 @@ export default async function MemberProfilePage({
             )}
             {member.isPortalAdmin && <Badge tone="indigo">Admin</Badge>}
             {member.parentMemberId && <Badge tone="zinc">Alt</Badge>}
-            {currentAbsence && <Badge tone="amber">Away</Badge>}
+            {currentAbsence && <Badge tone="amber">NOA</Badge>}
+            {asRegion(member.region) && (
+              <Badge tone="outline">{asRegion(member.region)}</Badge>
+            )}
           </h1>
           <p className="mt-1 text-sm text-zinc-500">
             {member.rank}
@@ -200,7 +204,7 @@ function Badge({
   tone,
   children,
 }: {
-  tone: "emerald" | "indigo" | "zinc" | "amber";
+  tone: "emerald" | "indigo" | "zinc" | "amber" | "outline";
   children: React.ReactNode;
 }) {
   const tones = {
@@ -208,6 +212,7 @@ function Badge({
     indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
     zinc: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
     amber: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    outline: "text-zinc-500 ring-1 ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700",
   };
   return (
     <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${tones[tone]}`}>

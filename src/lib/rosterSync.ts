@@ -2,6 +2,7 @@ import { db } from "@/db";
 import { members, ranks } from "@/db/schema";
 import { and, eq, inArray, isNull } from "drizzle-orm";
 import { listGuildMembers, type GuildMemberSummary } from "@/lib/discordBot";
+import { regionForRoleIds, type Region } from "@/lib/regions";
 
 export interface SyncResult {
   ok: boolean;
@@ -73,7 +74,12 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
 
   const intended = new Map<
     string,
-    { rank: string; username: string; avatarUrl: string }
+    {
+      rank: string;
+      username: string;
+      avatarUrl: string;
+      region: Region | null;
+    }
   >();
   for (const gm of guildMembers) {
     const best = bestRankFor(gm, rankByRoleId);
@@ -82,6 +88,9 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
         rank: best,
         username: gm.username,
         avatarUrl: gm.avatarUrl,
+        // Always written, including as null — losing the region role
+        // should clear the tag, not leave a stale one behind.
+        region: regionForRoleIds(gm.roleIds),
       });
     }
   }
@@ -117,6 +126,7 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
             .update(members)
             .set({
               rank: want.rank,
+              region: want.region,
               discordUsername: want.username,
               discordAvatarUrl: want.avatarUrl,
               deletedAt: null,
@@ -130,6 +140,7 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
             discordUsername: want.username,
             discordAvatarUrl: want.avatarUrl,
             rank: want.rank,
+            region: want.region,
             source: "discord",
           });
           added++;
@@ -139,6 +150,7 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
 
       const changed =
         current.rank !== want.rank ||
+        current.region !== want.region ||
         current.discordUsername !== want.username ||
         current.discordAvatarUrl !== want.avatarUrl ||
         current.deletedAt !== null;
@@ -148,6 +160,7 @@ export async function syncRosterFromDiscord(): Promise<SyncResult> {
           .update(members)
           .set({
             rank: want.rank,
+            region: want.region,
             discordUsername: want.username,
             discordAvatarUrl: want.avatarUrl,
             deletedAt: null, // rejoining/regaining the role restores them
