@@ -4,28 +4,16 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { db } from "@/db";
 import { bugCategories, bugReports, members } from "@/db/schema";
-import { and, asc, eq, isNull } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { hasAction, isFullAdmin } from "@/lib/permissions";
-import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
+import { getMemberByDiscordId } from "@/lib/members";
 import { listCategories, listTags, tagsForReports } from "@/lib/bugTaxonomy";
-import {
-  getReportParticipants,
-  getReportTimeline,
-  getReportVersion,
-  listStages,
-} from "@/lib/reports";
-import { currentAbsencesByMemberId } from "@/lib/activity";
-import { listRanksWithActions } from "@/lib/ranks";
-import { nowMs } from "@/lib/presence";
 import { TagChip } from "@/components/TagChip";
 import { ReportSettings } from "@/components/ReportSettings";
-import { ReportThread } from "@/components/ReportThread";
-import { ParticipantsPanel } from "@/components/ParticipantsPanel";
 import { ReportActions } from "@/components/ReportActions";
 import { ArchiveButton } from "@/components/ArchiveButton";
-import { ChangeNotePrompt } from "@/components/ChangeNotePrompt";
-import { changeNotesFor, getChangeNote } from "@/lib/changelog";
-
+import { Suspense } from "react";
+import { ReportDetailsLoader } from "@/components/ReportDetailsLoader";
 
 export default async function ReportDetailPage({
   params,
@@ -62,64 +50,18 @@ export default async function ReportDetailPage({
     ? await getMemberByDiscordId(live.user.discordId)
     : undefined;
 
-  const [
-    timeline,
-    stages,
-    participants,
-    tagsByReport,
-    allTags,
-    allCategories,
-    ranks,
-    away,
-    roster,
-    version,
-  ] = await Promise.all([
-    getReportTimeline(id),
-    listStages(id),
-    getReportParticipants(id, report.reporterId),
+  // Header data needed immediately
+  const [tagsByReport, allTags, allCategories] = await Promise.all([
     tagsForReports([id]),
     listTags(),
     listCategories(),
-    listRanksWithActions(),
-    currentAbsencesByMemberId(),
-    db
-      .select({
-        id: members.id,
-        robloxUsername: members.robloxUsername,
-        discordUsername: members.discordUsername,
-        discordId: members.discordId,
-      })
-      .from(members)
-      .where(and(isNull(members.deletedAt), isNull(members.parentMemberId)))
-      .orderBy(asc(members.robloxUsername)),
-    getReportVersion(id),
   ]);
-
-  // Only asked once the bug is closed, and only of the people who worked
-  // it — the reporter and whoever joined. Anyone else passing by has
-  // nothing to record.
-  const locked = report.completedAt !== null;
-  const onIt = participants.some((p) => p.memberId === me?.id);
-  const shouldAskForChanges =
-    locked && Boolean(me) && (onIt || report.reporterId === me?.id);
-
-  const [myNote, allNotes] = shouldAskForChanges
-    ? await Promise.all([
-        getChangeNote(id, me!.id),
-        changeNotesFor([id]),
-      ])
-    : [null, new Map<string, { author: string; body: string }[]>()];
 
   const tags = tagsByReport.get(id) ?? [];
   const canTriage = live?.user ? hasAction(live.user, "reports.triage") : false;
   const canDelete = live?.user ? hasAction(live.user, "reports.delete") : false;
   const isAdmin = live?.user ? isFullAdmin(live.user) : false;
-
-  // A stage is a claim about where the work has got to, so it comes from
-  // someone doing the work: whoever joined, whoever filed it, or an admin.
-  const canAddStage = Boolean(
-    me && (isAdmin || onIt || report.reporterId === me.id)
-  );
+  const locked = report.completedAt !== null;
 
   const reporterName =
     report.reporterRoblox ?? report.reporterDiscord ?? "someone";
@@ -167,8 +109,6 @@ export default async function ReportDetailPage({
             )}
           </div>
 
-          {/* Delete on top, Settings tucked underneath it — the pair of
-              things you do TO a report, out of the way of the report. */}
           <div className="flex shrink-0 flex-col items-end gap-2">
             {canDelete && <ReportActions reportId={report.id} />}
             {canTriage && (
@@ -190,55 +130,14 @@ export default async function ReportDetailPage({
         </div>
       </div>
 
-      {/* The thread takes the width it needs; the member list sits beside
-          it on desktop and drops below on narrow screens. */}
-      {shouldAskForChanges && (
-        <ChangeNotePrompt
-          reportId={report.id}
-          existing={myNote}
-          otherNotes={(allNotes.get(report.id) ?? []).filter(
-            (n) => n.body !== myNote
-          )}
-        />
-      )}
-
-      <div className="flex flex-col gap-5 md:flex-row md:items-start">
-        <div className="min-w-0 flex-1">
-          <ReportThread
-            reportId={report.id}
-            body={{
-              description: report.description,
-              attachments: report.attachments ?? [],
-              createdAt: report.createdAt.toISOString(),
-              authorId: report.reporterId,
-              authorName: reporterName,
-              authorAvatarUrl: report.reporterAvatarUrl,
-            }}
-            stages={stages}
-            entries={timeline}
-            meMemberId={me?.id ?? null}
-            canReply={Boolean(me)}
-            canAddStage={canAddStage}
-            canRemoveStage={isAdmin}
-            locked={locked}
-            version={version}
-          />
+      <Suspense fallback={
+        <div className="animate-pulse flex flex-col gap-5">
+          <div className="h-64 bg-zinc-100 dark:bg-zinc-900 rounded-xl"></div>
+          <div className="h-32 bg-zinc-100 dark:bg-zinc-900 rounded-xl"></div>
         </div>
-
-        <ParticipantsPanel
-          reportId={report.id}
-          participants={participants}
-          rankOrder={ranks.map((r) => r.name)}
-          awayMemberIds={[...away.keys()]}
-          meMemberId={me?.id ?? null}
-          serverNow={nowMs()}
-          canManage={isAdmin && !locked}
-          roster={roster.map((m) => ({
-            id: m.id,
-            name: displayNameFor(m),
-          }))}
-        />
-      </div>
+      }>
+        <ReportDetailsLoader report={report} me={me} isAdmin={isAdmin} />
+      </Suspense>
     </div>
   );
 }
