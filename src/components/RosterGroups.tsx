@@ -45,6 +45,7 @@ export function RosterGroups({
   groups,
   canManage,
   serverNow,
+  currentMemberId,
 }: {
   groups: RosterGroup[];
   canManage: boolean;
@@ -52,6 +53,7 @@ export function RosterGroups({
    * on the browser's own clock, so "Online" decays by itself on a page
    * that's been left open. */
   serverNow: number;
+  currentMemberId?: string | null;
 }) {
   const now = useNow(serverNow);
   // Collapsed rather than expanded is tracked, so a rank added later
@@ -200,7 +202,12 @@ export function RosterGroups({
                           <PresenceCell member={m} now={now} />
                         </span>
                       )}
-                      {canManage && (
+                      {(canManage ||
+                        (m.isAlt &&
+                          Boolean(
+                            currentMemberId &&
+                              m.parentMemberId === currentMemberId
+                          ))) && (
                         <DeleteMemberButton
                           memberId={m.id}
                           label={

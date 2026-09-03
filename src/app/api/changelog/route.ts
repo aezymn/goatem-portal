@@ -80,6 +80,16 @@ export async function POST(request: Request) {
     }
   }
 
+  // Custom pre-save lines added directly by the author
+  const customLines = parsed.data.customLines ?? [];
+  if (post && customLines.length > 0) {
+    for (const line of customLines) {
+      if (line.trim()) {
+        await addEntry(post.id, line.trim(), null);
+      }
+    }
+  }
+
   await logAudit(db, {
     actorDiscordId: discordId,
     actorName: displayNameFor(author),

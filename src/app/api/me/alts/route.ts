@@ -137,3 +137,71 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ member: created }, { status: 201 });
 }
+
+// Removing an alt account that belongs to the authenticated caller.
+export async function DELETE(request: Request) {
+  const session = await getServerSession(authOptions);
+  if (!session || session.stale || !session.user?.discordId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const { discordId } = session.user;
+
+  const owner = await getMemberByDiscordId(discordId);
+  if (!owner) {
+    return NextResponse.json(
+      { error: "You need to be on the roster to manage alt accounts." },
+      { status: 404 }
+    );
+  }
+
+  const url = new URL(request.url);
+  const idFromQuery = url.searchParams.get("id");
+  let altId = idFromQuery;
+  if (!altId) {
+    const body = await request.json().catch(() => ({}));
+    altId = body.altId || body.id;
+  }
+
+  if (!altId || typeof altId !== "string") {
+    return NextResponse.json({ error: "Missing alt ID." }, { status: 400 });
+  }
+
+  const [alt] = await db
+    .select()
+    .from(members)
+    .where(
+      and(
+        eq(members.id, altId),
+        eq(members.parentMemberId, owner.id),
+        eq(members.source, "alt")
+      )
+    )
+    .limit(1);
+
+  if (!alt) {
+    return NextResponse.json(
+      { error: "Alt account not found or not owned by you." },
+      { status: 404 }
+    );
+  }
+
+  await db.transaction(async (tx) => {
+    // Hard delete alt: purges record from storage so username is immediately freed
+    await tx.delete(members).where(eq(members.id, alt.id));
+
+    await logAudit(tx, {
+      actorDiscordId: discordId,
+      actorName: owner.robloxUsername ?? owner.discordUsername ?? discordId,
+      action: "member.deleteAlt",
+      targetType: "member",
+      targetId: alt.id,
+      metadata: {
+        robloxUsername: alt.robloxUsername,
+        ownerId: owner.id,
+      },
+    });
+  });
+
+  return NextResponse.json({ ok: true });
+}
+

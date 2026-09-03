@@ -126,3 +126,50 @@ export async function POST(request: Request) {
 
   return NextResponse.json({ member: updated });
 }
+
+// Unlinking your OWN Roblox account.
+export async function DELETE() {
+  const session = await getServerSession(authOptions);
+  if (!session || session.stale || !session.user?.discordId) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const { discordId } = session.user;
+
+  const member = await getMemberByDiscordId(discordId);
+  if (!member) {
+    return NextResponse.json(
+      { error: "You're not on the roster." },
+      { status: 404 }
+    );
+  }
+
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx
+      .update(members)
+      .set({
+        robloxUsername: null,
+        robloxUserId: null,
+        hasGameAccess: null,
+        gameAccessCheckedAt: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(members.id, member.id))
+      .returning();
+
+    await logAudit(tx, {
+      actorDiscordId: discordId,
+      actorName: row.discordUsername ?? discordId,
+      action: "member.unlinkRoblox",
+      targetType: "member",
+      targetId: row.id,
+      metadata: {
+        previousRobloxUsername: member.robloxUsername,
+      },
+    });
+
+    return row;
+  });
+
+  return NextResponse.json({ member: updated, ok: true });
+}
+

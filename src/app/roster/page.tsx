@@ -124,6 +124,7 @@ export default async function RosterPage() {
         groups={groups}
         canManage={canManageRoster}
         serverNow={nowMs()}
+        currentMemberId={me?.id}
       />
 
       {me && myDiscordId && (

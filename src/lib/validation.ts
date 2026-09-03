@@ -242,6 +242,11 @@ export const createChangelogPostSchema = z.object({
   /** Completed bug reports to pull in as entries, pre-filled from what
    * the devs said they changed. */
   reportIds: z.array(z.string().trim().max(64)).max(100).optional(),
+  /** Custom lines/bullet notes to add directly on post creation. */
+  customLines: z
+    .array(z.string().trim().min(1, "Line cannot be empty").max(500))
+    .max(50)
+    .optional(),
 });
 
 export const updateChangelogPostSchema = z
