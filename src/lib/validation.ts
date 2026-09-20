@@ -216,13 +216,29 @@ export const createAbsenceSchema = z
     path: ["returnDate"],
   });
 
+export const testLogBugAttachmentSchema = z.object({
+  bugReportId: z.string().trim().min(1, "Bug report ID is required"),
+  workedOnById: z.string().trim().min(1).nullable().optional(),
+});
+
 export const createTestLogSchema = z.object({
-  area: z.string().trim().min(2, "What did you test?").max(120),
-  findings: z.string().trim().min(1, "Add what you found").max(5000),
+  area: z.string().trim().min(2, "Give the test session a title").max(120),
+  findings: z.string().trim().min(1, "Add what happened / findings").max(5000),
   // Optional: not every session is worth timing, and forcing a number
   // invites made-up ones.
   minutesSpent: z.coerce.number().int().min(1).max(1440).nullable().optional(),
   testedAt: isoDate,
+  attendeeIds: z.array(z.string().trim().min(1)).max(100).optional(),
+  bugs: z.array(testLogBugAttachmentSchema).max(50).optional(),
+});
+
+export const updateTestLogSchema = z.object({
+  area: z.string().trim().min(2, "Give the test session a title").max(120).optional(),
+  findings: z.string().trim().min(1, "Add what happened / findings").max(5000).optional(),
+  minutesSpent: z.coerce.number().int().min(1).max(1440).nullable().optional(),
+  testedAt: isoDate.optional(),
+  attendeeIds: z.array(z.string().trim().min(1)).max(100).optional(),
+  bugs: z.array(testLogBugAttachmentSchema).max(50).optional(),
 });
 
 // --- Change log ---------------------------------------------------

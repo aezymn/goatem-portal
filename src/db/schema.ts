@@ -557,12 +557,59 @@ export const testLogs = pgTable(
   ]
 );
 
+// Who attended a testing session. A test can be logged by one person while
+// several participated; recording attendees lets activity and profile stats
+// credit everyone who was there.
+export const testLogAttendees = pgTable(
+  "test_log_attendees",
+  {
+    testLogId: text("test_log_id")
+      .notNull()
+      .references(() => testLogs.id, { onDelete: "cascade" }),
+    memberId: text("member_id")
+      .notNull()
+      .references(() => members.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.testLogId, table.memberId] }),
+    index("test_log_attendees_member_id_idx").on(table.memberId),
+  ]
+);
+
+// Bug reports attached to a test session, with an optional designation of who
+// worked on or verified each bug.
+export const testLogBugs = pgTable(
+  "test_log_bugs",
+  {
+    testLogId: text("test_log_id")
+      .notNull()
+      .references(() => testLogs.id, { onDelete: "cascade" }),
+    bugReportId: text("bug_report_id")
+      .notNull()
+      .references(() => bugReports.id, { onDelete: "cascade" }),
+    workedOnById: text("worked_on_by_id").references(() => members.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.testLogId, table.bugReportId] }),
+    index("test_log_bugs_bug_report_id_idx").on(table.bugReportId),
+  ]
+);
+
 export const membersRelations = relations(members, ({ one, many }) => ({
   reportsFiled: many(bugReports, { relationName: "reportsFiled" }),
   joinedReports: many(bugParticipants),
   comments: many(comments),
   absences: many(absences),
   testLogs: many(testLogs),
+  attendedTests: many(testLogAttendees),
   parent: one(members, {
     fields: [members.parentMemberId],
     references: [members.id],
@@ -712,9 +759,37 @@ export const absencesRelations = relations(absences, ({ one }) => ({
   }),
 }));
 
-export const testLogsRelations = relations(testLogs, ({ one }) => ({
+export const testLogsRelations = relations(testLogs, ({ one, many }) => ({
   member: one(members, {
     fields: [testLogs.memberId],
+    references: [members.id],
+  }),
+  attendees: many(testLogAttendees),
+  bugs: many(testLogBugs),
+}));
+
+export const testLogAttendeesRelations = relations(testLogAttendees, ({ one }) => ({
+  testLog: one(testLogs, {
+    fields: [testLogAttendees.testLogId],
+    references: [testLogs.id],
+  }),
+  member: one(members, {
+    fields: [testLogAttendees.memberId],
+    references: [members.id],
+  }),
+}));
+
+export const testLogBugsRelations = relations(testLogBugs, ({ one }) => ({
+  testLog: one(testLogs, {
+    fields: [testLogBugs.testLogId],
+    references: [testLogs.id],
+  }),
+  bugReport: one(bugReports, {
+    fields: [testLogBugs.bugReportId],
+    references: [bugReports.id],
+  }),
+  workedOnBy: one(members, {
+    fields: [testLogBugs.workedOnById],
     references: [members.id],
   }),
 }));
@@ -723,5 +798,9 @@ export type Absence = typeof absences.$inferSelect;
 export type NewAbsence = typeof absences.$inferInsert;
 export type TestLog = typeof testLogs.$inferSelect;
 export type NewTestLog = typeof testLogs.$inferInsert;
+export type TestLogAttendee = typeof testLogAttendees.$inferSelect;
+export type NewTestLogAttendee = typeof testLogAttendees.$inferInsert;
+export type TestLogBug = typeof testLogBugs.$inferSelect;
+export type NewTestLogBug = typeof testLogBugs.$inferInsert;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type NewAuditLogEntry = typeof auditLog.$inferInsert;
