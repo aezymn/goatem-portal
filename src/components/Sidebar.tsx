@@ -13,8 +13,10 @@ interface Me {
 }
 
 import {
+  LayoutDashboard,
   Bug,
   Users,
+  BarChart3,
   CalendarOff,
   FlaskConical,
   ScrollText,
@@ -33,10 +35,12 @@ interface NavItem {
 }
 
 const MAIN_NAV: NavItem[] = [
+  { href: "/", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4 shrink-0" /> },
   { href: "/reports", label: "Bug Reports", icon: <Bug className="h-4 w-4 shrink-0" /> },
   { href: "/roster", label: "Roster", icon: <Users className="h-4 w-4 shrink-0" /> },
-  { href: "/absence", label: "Report Absence", icon: <CalendarOff className="h-4 w-4 shrink-0" /> },
+  { href: "/overview", label: "Staff Overview", icon: <BarChart3 className="h-4 w-4 shrink-0" /> },
   { href: "/testing", label: "Report Testing", icon: <FlaskConical className="h-4 w-4 shrink-0" /> },
+  { href: "/absence", label: "Report Absence", icon: <CalendarOff className="h-4 w-4 shrink-0" /> },
   { href: "/changelog", label: "Change Log", icon: <ScrollText className="h-4 w-4 shrink-0" /> },
 ];
 
@@ -129,10 +133,7 @@ export function Sidebar() {
           {authed ? (
             <>
               <Section
-                items={MAIN_NAV.filter(
-                  (item) =>
-                    item.href !== "/changelog" || canSeeChangelog
-                )}
+                items={MAIN_NAV}
                 pathname={pathname}
               />
               {adminItems.length > 0 && (
@@ -200,10 +201,11 @@ function Section({
         </p>
       )}
       {items.map((item) => {
-        // Exact match, or a nested route beneath it — so /reports/new
-        // still highlights Bug Reports.
+        // Exact match for root, or exact/nested for sub-routes
         const active =
-          pathname === item.href || pathname.startsWith(`${item.href}/`);
+          item.href === "/"
+            ? pathname === "/"
+            : pathname === item.href || pathname.startsWith(`${item.href}/`);
         return (
           <Link
             key={item.href}

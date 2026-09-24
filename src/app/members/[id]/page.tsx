@@ -80,7 +80,7 @@ export default async function MemberProfilePage({
               <Badge tone="emerald">Creator</Badge>
             )}
             {member.isPortalAdmin && <Badge tone="indigo">Admin</Badge>}
-            {currentAbsence && <Badge tone="amber">NOA</Badge>}
+            {currentAbsence && <Badge tone="red">NOA</Badge>}
             {asRegion(member.region) && (
               <Badge tone="outline">{asRegion(member.region)}</Badge>
             )}
@@ -311,7 +311,7 @@ function Badge({
   tone,
   children,
 }: {
-  tone: "emerald" | "indigo" | "zinc" | "amber" | "outline";
+  tone: "emerald" | "indigo" | "zinc" | "amber" | "outline" | "red";
   children: React.ReactNode;
 }) {
   const tones = {
@@ -319,6 +319,7 @@ function Badge({
     indigo: "bg-indigo-100 text-indigo-700 dark:bg-indigo-950 dark:text-indigo-300",
     zinc: "bg-zinc-200 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400",
     amber: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
+    red: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
     outline: "text-zinc-500 ring-1 ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700",
   };
   return (

@@ -163,7 +163,7 @@ export function RosterGroups({
                             title={`On a notice of absence — back ${formatDay(
                               m.awayUntil
                             )}`}
-                            className="flex h-2 w-2 rounded-full bg-orange-500"
+                            className="flex h-2 w-2 rounded-full bg-red-500"
                           />
                         )}
                         {m.region && (

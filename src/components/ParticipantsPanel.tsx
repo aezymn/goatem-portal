@@ -152,7 +152,7 @@ export function ParticipantsPanel({
                   <span className="flex items-center gap-1">
                     <span className="truncate text-sm">{name}</span>
                     {p.isReporter && <Tag>OP</Tag>}
-                    {away.has(p.memberId) && <Tag tone="amber">NOA</Tag>}
+                    {away.has(p.memberId) && <Tag tone="red">NOA</Tag>}
                     {p.region && <Tag>{p.region}</Tag>}
                   </span>
                   <span className="truncate text-[11px] text-zinc-400">
@@ -214,13 +214,15 @@ function Tag({
   tone = "zinc",
   children,
 }: {
-  tone?: "zinc" | "amber";
+  tone?: "zinc" | "amber" | "red";
   children: React.ReactNode;
 }) {
   return (
     <span
-      className={`shrink-0 rounded-full px-1 py-px text-[9px] font-semibold uppercase tracking-wide ${
-        tone === "amber"
+      className={`shrink-0 rounded-full px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide ${
+        tone === "red"
+          ? "bg-red-100 text-red-800 ring-1 ring-red-300 dark:bg-red-950 dark:text-red-400 dark:ring-red-900"
+          : tone === "amber"
           ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-400"
           : "text-zinc-500 ring-1 ring-zinc-300 dark:text-zinc-400 dark:ring-zinc-700"
       }`}

@@ -57,7 +57,7 @@ export default async function AbsencePage() {
         rows={away}
         me={me?.id}
         canRemoveAny={canRemoveAny}
-        tone="amber"
+        tone="red"
       />
       <Group
         title="Scheduled"
@@ -110,7 +110,7 @@ function Group({
   rows: Awaited<ReturnType<typeof listAbsences>>;
   me?: string;
   canRemoveAny: boolean;
-  tone?: "amber";
+  tone?: "red";
 }) {
   return (
     <section className="overflow-hidden rounded-xl border border-zinc-200 dark:border-zinc-800">
@@ -134,8 +134,8 @@ function Group({
               />
               <span
                 className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                  tone === "amber"
-                    ? "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                  tone === "red"
+                    ? "border border-red-200 bg-red-100 text-red-800 dark:border-red-900/60 dark:bg-red-950/80 dark:text-red-300"
                     : "bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400"
                 }`}
               >

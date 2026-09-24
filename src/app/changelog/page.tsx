@@ -16,8 +16,8 @@ import { listEntries, listPosts } from "@/lib/changelog";
 export default async function ChangelogPage() {
   const session = await getServerSession(authOptions);
   const live = session && !session.stale ? session : null;
-  if (!live?.user || !hasAction(live.user, "changelog.view")) {
-    redirect("/access-denied");
+  if (!live?.user) {
+    redirect("/sign-in");
   }
 
   const posts = await listPosts({ publishedOnly: true });

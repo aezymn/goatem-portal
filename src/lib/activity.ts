@@ -136,7 +136,15 @@ export async function getMemberTotals(memberId: string) {
     db
       .select({ n: sql<number>`coalesce(sum(${testLogs.minutesSpent}), 0)::int` })
       .from(testLogs)
-      .where(and(eq(testLogs.memberId, memberId), isNull(testLogs.deletedAt))),
+      .where(
+        and(
+          isNull(testLogs.deletedAt),
+          or(
+            eq(testLogs.memberId, memberId),
+            inArray(testLogs.id, attendedLogs)
+          )
+        )
+      ),
   ]);
   return {
     testLogs: logCount?.n ?? 0,
@@ -384,3 +392,294 @@ export async function listActiveBugsForSelect() {
     .orderBy(desc(bugReports.createdAt))
     .limit(100);
 }
+
+export interface StaffLeaderboardItem {
+  id: string;
+  robloxUsername: string | null;
+  discordUsername: string | null;
+  discordAvatarUrl: string | null;
+  rank: string;
+  isPortalAdmin: boolean;
+  hasSignedIn: boolean;
+  lastActiveAt: Date | null;
+  lastSeenAt: Date | null;
+  testSessionCount: number;
+  testMinutesLogged: number;
+  bugsFiledCount: number;
+  isAway: boolean;
+  awayUntil: string | null;
+  inactiveDays: number | null;
+  isInactiveWarning: boolean;
+}
+
+export interface RankDistributionItem {
+  rank: string;
+  memberCount: number;
+  totalMinutes: number;
+  totalBugs: number;
+}
+
+export interface RecentActivityItem {
+  id: string;
+  type: "test_session" | "bug_report" | "absence";
+  title: string;
+  detail: string | null;
+  actorId: string;
+  actorName: string;
+  actorAvatarUrl: string | null;
+  timestamp: Date;
+}
+
+export interface StaffOverviewData {
+  totals: {
+    totalStaff: number;
+    totalTestSessions: number;
+    totalTestMinutes: number;
+    totalBugsFiled: number;
+    totalCurrentlyAway: number;
+  };
+  leaderboard: StaffLeaderboardItem[];
+  rankDistribution: RankDistributionItem[];
+  recentFeed: RecentActivityItem[];
+}
+
+export async function getStaffOverviewStats(): Promise<StaffOverviewData> {
+  const [
+    rosterMembers,
+    awayMap,
+    allLogs,
+    allAttendees,
+    allBugs,
+    recentAbsences,
+  ] = await Promise.all([
+    db
+      .select({
+        id: members.id,
+        robloxUsername: members.robloxUsername,
+        discordUsername: members.discordUsername,
+        discordAvatarUrl: members.discordAvatarUrl,
+        rank: members.rank,
+        isPortalAdmin: members.isPortalAdmin,
+        hasSignedIn: members.hasSignedIn,
+        lastActiveAt: members.lastActiveAt,
+        lastSeenAt: members.lastSeenAt,
+        lastSignInAt: members.lastSignInAt,
+        createdAt: members.createdAt,
+      })
+      .from(members)
+      .where(and(isNull(members.deletedAt), isNull(members.parentMemberId)))
+      .orderBy(asc(members.robloxUsername)),
+    currentAbsencesByMemberId(),
+    db
+      .select({
+        id: testLogs.id,
+        memberId: testLogs.memberId,
+        area: testLogs.area,
+        findings: testLogs.findings,
+        minutesSpent: testLogs.minutesSpent,
+        testedAt: testLogs.testedAt,
+        createdAt: testLogs.createdAt,
+      })
+      .from(testLogs)
+      .where(isNull(testLogs.deletedAt))
+      .orderBy(desc(testLogs.createdAt)),
+    db
+      .select({
+        testLogId: testLogAttendees.testLogId,
+        memberId: testLogAttendees.memberId,
+      })
+      .from(testLogAttendees),
+    db
+      .select({
+        id: bugReports.id,
+        title: bugReports.title,
+        reporterId: bugReports.reporterId,
+        createdAt: bugReports.createdAt,
+        completedAt: bugReports.completedAt,
+      })
+      .from(bugReports)
+      .where(isNull(bugReports.deletedAt))
+      .orderBy(desc(bugReports.createdAt)),
+    db
+      .select({
+        id: absences.id,
+        memberId: absences.memberId,
+        leaveDate: absences.leaveDate,
+        returnDate: absences.returnDate,
+        reason: absences.reason,
+        createdAt: absences.createdAt,
+      })
+      .from(absences)
+      .where(isNull(absences.deletedAt))
+      .orderBy(desc(absences.createdAt))
+      .limit(15),
+  ]);
+
+  // Map attendees per test session
+  const attendeesByLogId = new Map<string, Set<string>>();
+  for (const att of allAttendees) {
+    const s = attendeesByLogId.get(att.testLogId) ?? new Set<string>();
+    s.add(att.memberId);
+    attendeesByLogId.set(att.testLogId, s);
+  }
+
+  // Roster lookup by ID
+  const memberById = new Map(rosterMembers.map((m) => [m.id, m]));
+
+  const now = new Date();
+
+  // Aggregate stats per member
+  const leaderboard: StaffLeaderboardItem[] = rosterMembers.map((m) => {
+    let sessionCount = 0;
+    let minutesLogged = 0;
+
+    for (const log of allLogs) {
+      const attendees = attendeesByLogId.get(log.id);
+      const isHost = log.memberId === m.id;
+      const attended = attendees ? attendees.has(m.id) : isHost; // fallback if no attendee rows
+
+      if (isHost || attended) {
+        sessionCount++;
+        minutesLogged += log.minutesSpent ?? 0;
+      }
+    }
+
+    const bugsFiledCount = allBugs.filter((b) => b.reporterId === m.id).length;
+
+    // Calculate inactivity
+    const mostRecentActivity =
+      m.lastActiveAt ?? m.lastSeenAt ?? m.lastSignInAt ?? null;
+    let inactiveDays: number | null = null;
+    let isInactiveWarning = false;
+
+    if (mostRecentActivity) {
+      const diffMs = now.getTime() - new Date(mostRecentActivity).getTime();
+      inactiveDays = Math.max(0, Math.floor(diffMs / (1000 * 60 * 60 * 24)));
+      if (inactiveDays >= 14) isInactiveWarning = true;
+    } else {
+      isInactiveWarning = true;
+    }
+
+    return {
+      id: m.id,
+      robloxUsername: m.robloxUsername,
+      discordUsername: m.discordUsername,
+      discordAvatarUrl: m.discordAvatarUrl,
+      rank: m.rank,
+      isPortalAdmin: m.isPortalAdmin,
+      hasSignedIn: m.hasSignedIn,
+      lastActiveAt: m.lastActiveAt,
+      lastSeenAt: m.lastSeenAt,
+      testSessionCount: sessionCount,
+      testMinutesLogged: minutesLogged,
+      bugsFiledCount,
+      isAway: awayMap.has(m.id),
+      awayUntil: awayMap.get(m.id) ?? null,
+      inactiveDays,
+      isInactiveWarning,
+    };
+  });
+
+  // Sort leaderboard by most testing minutes first, then session count, then bugs
+  leaderboard.sort((a, b) => {
+    if (b.testMinutesLogged !== a.testMinutesLogged) {
+      return b.testMinutesLogged - a.testMinutesLogged;
+    }
+    if (b.testSessionCount !== a.testSessionCount) {
+      return b.testSessionCount - a.testSessionCount;
+    }
+    return b.bugsFiledCount - a.bugsFiledCount;
+  });
+
+  // Rank distributions
+  const rankMap = new Map<
+    string,
+    { memberCount: number; totalMinutes: number; totalBugs: number }
+  >();
+  for (const item of leaderboard) {
+    const current = rankMap.get(item.rank) ?? {
+      memberCount: 0,
+      totalMinutes: 0,
+      totalBugs: 0,
+    };
+    current.memberCount++;
+    current.totalMinutes += item.testMinutesLogged;
+    current.totalBugs += item.bugsFiledCount;
+    rankMap.set(item.rank, current);
+  }
+
+  const rankDistribution: RankDistributionItem[] = Array.from(
+    rankMap.entries()
+  ).map(([rank, data]) => ({
+    rank,
+    ...data,
+  }));
+
+  // Build unified recent activity feed
+  const recentFeed: RecentActivityItem[] = [];
+
+  for (const log of allLogs.slice(0, 10)) {
+    const actor = memberById.get(log.memberId);
+    recentFeed.push({
+      id: `test_${log.id}`,
+      type: "test_session",
+      title: `Logged Testing: ${log.area}`,
+      detail: log.minutesSpent ? `${log.minutesSpent} minutes recorded` : null,
+      actorId: log.memberId,
+      actorName: actor?.robloxUsername ?? actor?.discordUsername ?? "Member",
+      actorAvatarUrl: actor?.discordAvatarUrl ?? null,
+      timestamp: log.createdAt,
+    });
+  }
+
+  for (const bug of allBugs.slice(0, 10)) {
+    const actor = memberById.get(bug.reporterId);
+    recentFeed.push({
+      id: `bug_${bug.id}`,
+      type: "bug_report",
+      title: `Reported Bug: ${bug.title}`,
+      detail: bug.completedAt ? "Resolved & locked" : "Active report",
+      actorId: bug.reporterId,
+      actorName: actor?.robloxUsername ?? actor?.discordUsername ?? "Member",
+      actorAvatarUrl: actor?.discordAvatarUrl ?? null,
+      timestamp: bug.createdAt,
+    });
+  }
+
+  for (const abs of recentAbsences.slice(0, 10)) {
+    const actor = memberById.get(abs.memberId);
+    recentFeed.push({
+      id: `abs_${abs.id}`,
+      type: "absence",
+      title: `Absence Notice: back ${abs.returnDate}`,
+      detail: abs.reason || "Notice of absence filed",
+      actorId: abs.memberId,
+      actorName: actor?.robloxUsername ?? actor?.discordUsername ?? "Member",
+      actorAvatarUrl: actor?.discordAvatarUrl ?? null,
+      timestamp: abs.createdAt,
+    });
+  }
+
+  // Sort combined feed newest first, limit 15
+  recentFeed.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+  const trimmedFeed = recentFeed.slice(0, 15);
+
+  const totalTestMinutes = allLogs.reduce(
+    (sum, l) => sum + (l.minutesSpent ?? 0),
+    0
+  );
+
+  return {
+    totals: {
+      totalStaff: rosterMembers.length,
+      totalTestSessions: allLogs.length,
+      totalTestMinutes,
+      totalBugsFiled: allBugs.length,
+      totalCurrentlyAway: awayMap.size,
+    },
+    leaderboard,
+    rankDistribution,
+    recentFeed: trimmedFeed,
+  };
+}
+
