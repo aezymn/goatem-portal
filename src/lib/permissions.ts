@@ -82,6 +82,7 @@ export const RANK_ACTIONS = [
   "changelog.view",
   "changelog.write",
   "changelog.approve",
+  "feedback.submit",
 ] as const;
 
 export type RankAction = (typeof RANK_ACTIONS)[number];

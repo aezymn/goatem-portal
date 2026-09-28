@@ -35,6 +35,10 @@ const ACTION_LABELS: Record<RankAction, { short: string; hint: string }> = {
     short: "Approve change log",
     hint: "Publish a change log post — the final say on what goes out",
   },
+  "feedback.submit": {
+    short: "Submit beta feedback",
+    hint: "Access the Beta Feedback portal to submit and track issue reports",
+  },
 };
 
 interface RankRow {

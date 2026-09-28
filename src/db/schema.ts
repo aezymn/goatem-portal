@@ -804,3 +804,95 @@ export type TestLogBug = typeof testLogBugs.$inferSelect;
 export type NewTestLogBug = typeof testLogBugs.$inferInsert;
 export type AuditLogEntry = typeof auditLog.$inferSelect;
 export type NewAuditLogEntry = typeof auditLog.$inferInsert;
+
+// Feedback submitted by Beta Testers — the first stop before a defect
+// becomes a formal bug report. Deliberately stores the submitter's Discord
+// identity as plain strings rather than a members FK: Beta Testers are guild
+// members who may not have a QA roster row, and requiring one would mean they
+// could never submit anything. The three cached fields are snapshotted at
+// submission time so the report stays readable even if the person leaves the
+// server later.
+//
+// `escalatedToReportId` is set the moment a QA triager promotes this into a
+// formal bug report; it's the only cross-table link and it points at the bug
+// report created from this entry. ON DELETE SET NULL: deleting the resulting
+// bug report should not retroactively erase the original feedback.
+//
+// `status` follows a simple lifecycle:
+//   new        -> triager hasn't looked at it yet
+//   reviewed   -> triager has read it but decided not to escalate (yet)
+//   escalated  -> a bug report was created; escalatedToReportId is set
+//   dismissed  -> won't be actioned
+export const feedbackStatusEnum = pgEnum("feedback_status", [
+  "new",
+  "reviewed",
+  "escalated",
+  "dismissed",
+]);
+
+export const feedbackSeverityEnum = pgEnum("feedback_severity", [
+  "low",
+  "medium",
+  "high",
+  "critical",
+]);
+
+export const feedbackReports = pgTable(
+  "feedback_reports",
+  {
+    id: text("id").primaryKey().$defaultFn(() => createId()),
+    // Submitter identity — stored as Discord fields directly (not a members
+    // FK) so Beta Testers who are not on the QA roster can submit.
+    submitterDiscordId: text("submitter_discord_id").notNull(),
+    submitterDiscordUsername: text("submitter_discord_username").notNull(),
+    submitterAvatarUrl: text("submitter_avatar_url"),
+    title: text("title").notNull(),
+    description: text("description").notNull(),
+    stepsToReproduce: text("steps_to_reproduce"),
+    severity: feedbackSeverityEnum("severity").notNull().default("medium"),
+    // Same attachment-URLs-only approach as bug reports.
+    attachments: jsonb("attachments").$type<string[]>().notNull().default([]),
+    status: feedbackStatusEnum("status").notNull().default("new"),
+    // Set when a triager promotes this to a formal bug report.
+    escalatedToReportId: text("escalated_to_report_id").references(
+      () => bugReports.id,
+      { onDelete: "set null" }
+    ),
+    // Who reviewed/dismissed/escalated it, and when.
+    reviewedById: text("reviewed_by_id").references(() => members.id, {
+      onDelete: "set null",
+    }),
+    reviewedAt: timestamp("reviewed_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    deletedAt: timestamp("deleted_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("feedback_reports_submitter_discord_id_idx").on(
+      table.submitterDiscordId
+    ),
+    index("feedback_reports_status_idx").on(table.status),
+    index("feedback_reports_created_at_idx").on(table.createdAt),
+  ]
+);
+
+export const feedbackReportsRelations = relations(
+  feedbackReports,
+  ({ one }) => ({
+    escalatedToReport: one(bugReports, {
+      fields: [feedbackReports.escalatedToReportId],
+      references: [bugReports.id],
+    }),
+    reviewedBy: one(members, {
+      fields: [feedbackReports.reviewedById],
+      references: [members.id],
+    }),
+  })
+);
+
+export type FeedbackReport = typeof feedbackReports.$inferSelect;
+export type NewFeedbackReport = typeof feedbackReports.$inferInsert;

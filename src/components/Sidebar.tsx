@@ -26,6 +26,7 @@ import {
   History,
   FileClock,
   Menu,
+  MessageSquareWarning,
 } from "lucide-react";
 
 interface NavItem {
@@ -34,7 +35,7 @@ interface NavItem {
   icon: React.ReactNode;
 }
 
-const MAIN_NAV: NavItem[] = [
+const BASE_MAIN_NAV: NavItem[] = [
   { href: "/", label: "Dashboard", icon: <LayoutDashboard className="h-4 w-4 shrink-0" /> },
   { href: "/reports", label: "Bug Reports", icon: <Bug className="h-4 w-4 shrink-0" /> },
   { href: "/roster", label: "Roster", icon: <Users className="h-4 w-4 shrink-0" /> },
@@ -62,6 +63,26 @@ export function Sidebar() {
   const canBugSetup = isAdmin || actions.includes("bugsetup.manage");
   const canSeeChangelog = isAdmin || actions.includes("changelog.view");
   const canWriteChangelog = isAdmin || actions.includes("changelog.write");
+  const canSeeFeedback =
+    isAdmin ||
+    actions.includes("reports.triage") ||
+    actions.includes("feedback.submit");
+
+  // Build main nav dynamically so the Feedback link only appears when the
+  // session grants either feedback.submit (Beta Testers) or reports.triage
+  // (QA staff who need to triage it).
+  const mainNav = [
+    ...BASE_MAIN_NAV,
+    ...(canSeeFeedback
+      ? [
+          {
+            href: "/feedback",
+            label: "Beta Feedback",
+            icon: <MessageSquareWarning className="h-4 w-4 shrink-0" />,
+          },
+        ]
+      : []),
+  ];
 
   const [me, setMe] = useState<Me | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -133,7 +154,7 @@ export function Sidebar() {
           {authed ? (
             <>
               <Section
-                items={MAIN_NAV}
+                items={mainNav}
                 pathname={pathname}
               />
               {adminItems.length > 0 && (

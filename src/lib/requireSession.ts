@@ -67,6 +67,19 @@ export async function requireRosterMember(): Promise<AuthResult> {
 }
 
 /**
+ * Any signed-in, active guild member — regardless of whether they are on
+ * the QA roster. Beta Testers are guild members who may not have a roster
+ * row, so this is the right gate for the feedback portal. The session's
+ * `actions` array is still populated when the user is a roster member with
+ * rank actions (including feedback.submit), so callers can narrow further.
+ */
+export async function requireGuildMember(): Promise<AuthResult> {
+  const session = await getServerSession(authOptions);
+  if (!baseSession(session)) return UNAUTHORIZED;
+  return { ok: true, session };
+}
+
+/**
  * The one place every mutating (and most reading) API route should call
  * to find out whether the caller can perform `action`. This re-derives
  * identity and access from the server-side session on every call — it
