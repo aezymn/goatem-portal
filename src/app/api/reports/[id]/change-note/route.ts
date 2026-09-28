@@ -53,5 +53,11 @@ export async function POST(
   }
 
   await saveChangeNote(id, member.id, parsed.data.body);
+
+  const { pusherServer } = await import("@/lib/pusher");
+  await pusherServer.trigger(`report-${id}`, "refresh", {}).catch(err => {
+    console.error("Pusher error:", err);
+  });
+
   return NextResponse.json({ ok: true });
 }

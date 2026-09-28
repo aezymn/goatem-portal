@@ -34,6 +34,11 @@ async function run(id: string, archived: boolean) {
     targetId: id,
   });
 
+  const { pusherServer } = await import("@/lib/pusher");
+  await pusherServer.trigger(`report-${id}`, "refresh", {}).catch(err => {
+    console.error("Pusher error:", err);
+  });
+
   return NextResponse.json({ ok: true, archived });
 }
 

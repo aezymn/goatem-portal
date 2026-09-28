@@ -128,6 +128,11 @@ export async function POST(
     ...(target.id === member.id ? {} : { metadata: { memberId: target.id } }),
   });
 
+  const { pusherServer } = await import("@/lib/pusher");
+  await pusherServer.trigger(`report-${id}`, "refresh", {}).catch(err => {
+    console.error("Pusher error:", err);
+  });
+
   return NextResponse.json({ ok: true, joined: true });
 }
 
@@ -165,6 +170,11 @@ export async function DELETE(
     targetType: "bug_report",
     targetId: id,
     ...(target.id === member.id ? {} : { metadata: { memberId: target.id } }),
+  });
+
+  const { pusherServer } = await import("@/lib/pusher");
+  await pusherServer.trigger(`report-${id}`, "refresh", {}).catch(err => {
+    console.error("Pusher error:", err);
   });
 
   return NextResponse.json({ ok: true, joined: false });

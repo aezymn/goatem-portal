@@ -14,6 +14,7 @@ import { ReportActions } from "@/components/ReportActions";
 import { ArchiveButton } from "@/components/ArchiveButton";
 import { Suspense } from "react";
 import { ReportDetailsLoader } from "@/components/ReportDetailsLoader";
+import { PusherListener } from "@/components/PusherListener";
 
 export default async function ReportDetailPage({
   params,
@@ -68,6 +69,7 @@ export default async function ReportDetailPage({
 
   return (
     <div className="flex flex-col gap-5">
+      <PusherListener channelName={`report-${id}`} eventName="refresh" />
       <div className="flex flex-col gap-2">
         <Link
           href="/reports"

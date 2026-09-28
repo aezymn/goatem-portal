@@ -134,6 +134,11 @@ export async function PATCH(
 
   if (tagIds !== undefined) await setReportTags(id, tagIds);
 
+  const { pusherServer } = await import("@/lib/pusher");
+  await pusherServer.trigger(`report-${id}`, "refresh", {}).catch(err => {
+    console.error("Pusher error:", err);
+  });
+
   return NextResponse.json({ report: updated });
 }
 
@@ -177,5 +182,10 @@ export async function DELETE(
   if (!result) {
     return NextResponse.json({ error: "not found" }, { status: 404 });
   }
+  const { pusherServer } = await import("@/lib/pusher");
+  await pusherServer.trigger(`report-${id}`, "refresh", {}).catch(err => {
+    console.error("Pusher error:", err);
+  });
+
   return NextResponse.json({ ok: true });
 }
