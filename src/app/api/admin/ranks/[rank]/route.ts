@@ -82,6 +82,19 @@ export async function PATCH(
     });
   }
 
+  if (parsed.data.isQa !== undefined) {
+    const { setRankQaAccess } = await import("@/lib/ranks");
+    await setRankQaAccess(currentName, parsed.data.isQa);
+    await logAudit(db, {
+      actorDiscordId: discordId,
+      actorName,
+      action: "rank.setQaAccess",
+      targetType: "rank",
+      targetId: currentName,
+      metadata: { isQa: parsed.data.isQa },
+    });
+  }
+
   return NextResponse.json({ ok: true, name: currentName });
 }
 

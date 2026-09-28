@@ -50,6 +50,7 @@ export const ranks = pgTable("ranks", {
   name: text("name").primaryKey(),
   position: integer("position").notNull(),
   discordRoleId: text("discord_role_id").unique(),
+  isQa: boolean("is_qa").notNull().default(true),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

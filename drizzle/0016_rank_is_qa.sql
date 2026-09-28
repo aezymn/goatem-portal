@@ -1,0 +1,1 @@
+ALTER TABLE "ranks" ADD COLUMN "is_qa" boolean DEFAULT true NOT NULL;

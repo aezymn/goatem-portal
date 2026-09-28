@@ -83,6 +83,17 @@ async function computeIsPortalAdmin(discordId: string): Promise<boolean> {
   return member?.isPortalAdmin ?? false;
 }
 
+async function computeIsQaRank(discordId: string): Promise<boolean> {
+  const member = await getMemberByDiscordId(discordId);
+  if (!member) return false;
+  
+  const { db } = await import("@/db");
+  const { ranks } = await import("@/db/schema");
+  const { eq } = await import("drizzle-orm");
+  const [row] = await db.select({ isQa: ranks.isQa }).from(ranks).where(eq(ranks.name, member.rank));
+  return row?.isQa ?? true;
+}
+
 export const authOptions: AuthOptions = {
   providers: [
     DiscordProvider({
@@ -146,6 +157,12 @@ export const authOptions: AuthOptions = {
         token.isCreator = isCreatorDiscordId(discordId);
         token.isPortalAdmin = await computeIsPortalAdmin(discordId);
         token.actions = await computeRankActions(discordId);
+        
+        const { getMemberByDiscordId } = await import("@/lib/members");
+        const member = await getMemberByDiscordId(discordId);
+        token.isOnRoster = Boolean(member);
+        token.isQaRank = await computeIsQaRank(discordId);
+
         token.accessToken = account.access_token;
         token.rolesCheckedAt = Date.now();
         token.invalid = false;
@@ -188,6 +205,12 @@ export const authOptions: AuthOptions = {
         token.isCreator = isCreatorDiscordId(token.discordId);
         token.isPortalAdmin = await computeIsPortalAdmin(token.discordId);
         token.actions = await computeRankActions(token.discordId);
+
+        const { getMemberByDiscordId } = await import("@/lib/members");
+        const member = await getMemberByDiscordId(token.discordId);
+        token.isOnRoster = Boolean(member);
+        token.isQaRank = await computeIsQaRank(token.discordId);
+
         token.rolesCheckedAt = Date.now();
         token.invalid = false;
       }
@@ -203,6 +226,8 @@ export const authOptions: AuthOptions = {
       session.user.isCreator = token.isCreator ?? false;
       session.user.isPortalAdmin = token.isPortalAdmin ?? false;
       session.user.actions = token.actions ?? [];
+      session.user.isOnRoster = token.isOnRoster ?? false;
+      session.user.isQaRank = token.isQaRank ?? true;
       return session;
     },
   },

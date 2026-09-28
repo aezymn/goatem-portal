@@ -14,6 +14,10 @@ declare module "next-auth" {
        * meaningful when isCreator/isPortalAdmin are both false — those two
        * already imply every action. See src/lib/permissions.ts. */
       actions: RankAction[];
+      /** Whether this user actually has a row in the members table. */
+      isOnRoster: boolean;
+      /** Whether their rank grants them baseline QA access. */
+      isQaRank: boolean;
     } & DefaultSession["user"];
     /** True only when sign-in succeeded but the guild-membership/role
      * re-check has since failed (token expired, kicked from guild, etc).
@@ -28,6 +32,8 @@ declare module "next-auth/jwt" {
     isCreator?: boolean;
     isPortalAdmin?: boolean;
     actions?: RankAction[];
+    isOnRoster?: boolean;
+    isQaRank?: boolean;
     accessToken?: string;
     rolesCheckedAt?: number;
     invalid?: boolean;

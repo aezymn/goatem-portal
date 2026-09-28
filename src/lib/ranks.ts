@@ -11,6 +11,7 @@ export interface RankWithActions {
   position: number;
   discordRoleId: string | null;
   actions: RankAction[];
+  isQa: boolean;
   /** How many people currently hold this rank. Shown on the Ranks page,
    * and what makes a rank undeletable while it's still in use. */
   memberCount: number;
@@ -58,6 +59,7 @@ export async function listRanksWithActions(): Promise<RankWithActions[]> {
       name: r.name,
       position: r.position,
       discordRoleId: r.discordRoleId,
+      isQa: r.isQa,
       actions: actionsByRank.get(r.name) ?? [],
       memberCount: countByRank.get(r.name) ?? 0,
     });
@@ -74,6 +76,7 @@ export async function listRanksWithActions(): Promise<RankWithActions[]> {
       name: rank,
       position: nextPosition++,
       discordRoleId: null,
+      isQa: true,
       actions: [],
       memberCount: countByRank.get(rank) ?? 0,
     });
@@ -254,4 +257,12 @@ export async function renameRank(
 
     return { ok: true as const, movedMembers: moved.length };
   });
+}
+
+export async function setRankQaAccess(rank: string, isQa: boolean) {
+  await ensureRank(rank);
+  await db
+    .update(ranks)
+    .set({ isQa, updatedAt: new Date() })
+    .where(eq(ranks.name, rank));
 }

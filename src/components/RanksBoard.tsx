@@ -46,6 +46,7 @@ interface RankRow {
   position: number;
   discordRoleId: string | null;
   actions: RankAction[];
+  isQa: boolean;
   memberCount: number;
 }
 
@@ -159,6 +160,26 @@ export function RanksBoard({
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       setError(data.error ?? "Couldn't bind that role — refreshing.");
+      router.refresh();
+    }
+  }
+
+  async function toggleQaAccess(rank: string, isQa: boolean) {
+    setBusyRank(rank);
+    setError(null);
+    setRanks((prev) =>
+      prev.map((r) => (r.name === rank ? { ...r, isQa } : r))
+    );
+
+    const res = await fetch(`/api/admin/ranks/${encodeURIComponent(rank)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ isQa }),
+    });
+    setBusyRank(null);
+    if (!res.ok) {
+      const data = await res.json().catch(() => ({}));
+      setError(data.error ?? "Couldn't update QA access — refreshing.");
       router.refresh();
     }
   }
@@ -381,6 +402,27 @@ export function RanksBoard({
 
               {/* Permission pills */}
               <div className="flex flex-wrap gap-1.5 border-t border-zinc-100 px-3 py-2.5 dark:border-zinc-900">
+                <label
+                  title="Whether this rank grants access to QA pages (Roster, Reports, etc.)."
+                  className="cursor-pointer"
+                >
+                  <input
+                    type="checkbox"
+                    checked={rank.isQa}
+                    disabled={busyRank === rank.name}
+                    onChange={(e) => toggleQaAccess(rank.name, e.target.checked)}
+                    className="peer sr-only"
+                  />
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-zinc-200 px-2.5 py-1 text-xs text-zinc-500 transition peer-checked:border-emerald-500 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 peer-focus-visible:ring-2 peer-focus-visible:ring-emerald-400 peer-disabled:opacity-50 dark:border-zinc-800 dark:text-zinc-400 dark:peer-checked:bg-emerald-950 dark:peer-checked:text-emerald-300">
+                    <span aria-hidden className="text-[10px]">
+                      {rank.isQa ? "✓" : "○"}
+                    </span>
+                    QA Access
+                  </span>
+                </label>
+
+                <div className="h-4 w-px bg-zinc-200 self-center mx-1 dark:bg-zinc-800"></div>
+
                 {RANK_ACTIONS.map((action) => {
                   const on = rank.actions.includes(action);
                   return (

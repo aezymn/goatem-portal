@@ -160,10 +160,17 @@ export const updateRankSchema = z
       .nullable()
       .optional(),
     name: z.string().trim().min(1, "Give the rank a name").max(50).optional(),
+    isQa: z.boolean().optional(),
   })
-  .refine((d) => d.discordRoleId !== undefined || d.name !== undefined, {
-    message: "Nothing to update",
-  });
+  .refine(
+    (d) =>
+      d.discordRoleId !== undefined ||
+      d.name !== undefined ||
+      d.isQa !== undefined,
+    {
+      message: "Nothing to update",
+    }
+  );
 
 export const setRankActionSchema = z.object({
   action: z.enum([...RANK_ACTIONS] as [string, ...string[]]),

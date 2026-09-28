@@ -61,7 +61,10 @@ export async function requireRosterMember(): Promise<AuthResult> {
   if (!baseSession(session)) return UNAUTHORIZED;
 
   const member = await getMemberByDiscordId(session.user.discordId);
-  if (!member && !isFullAdmin(accessContext(session))) return FORBIDDEN;
+  const isAdmin = isFullAdmin(accessContext(session));
+  
+  if (!member && !isAdmin) return FORBIDDEN;
+  if (!session.user.isQaRank && !isAdmin) return FORBIDDEN;
 
   return { ok: true, session };
 }
