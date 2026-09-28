@@ -67,12 +67,16 @@ export function Sidebar() {
     isAdmin ||
     actions.includes("reports.triage") ||
     actions.includes("feedback.submit");
+  const isOnRoster = session?.user?.isOnRoster ?? false;
   const isQa = session?.user?.isQaRank ?? true;
 
   // Build main nav dynamically so the Feedback link only appears when the
   // session grants either feedback.submit (Beta Testers) or reports.triage
   // (QA staff who need to triage it). QA-only links are hidden from Beta Testers.
   const mainNav = BASE_MAIN_NAV.filter((item) => {
+    if (!isOnRoster && ["/reports", "/roster", "/overview", "/testing", "/absence"].includes(item.href)) {
+      return false;
+    }
     if (!isQa && ["/reports", "/overview", "/testing", "/absence"].includes(item.href)) {
       return false;
     }
