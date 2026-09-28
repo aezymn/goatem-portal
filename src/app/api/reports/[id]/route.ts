@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { bugReports, members } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireRosterMember, requireAction } from "@/lib/requireSession";
+import { requireQaMember, requireAction } from "@/lib/requireSession";
 import { updateReportSchema } from "@/lib/validation";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
@@ -17,7 +17,7 @@ export async function GET(
   _request: Request,
   ctx: RouteContext<"/api/reports/[id]">
 ) {
-  const auth = await requireRosterMember();
+  const auth = await requireQaMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
 

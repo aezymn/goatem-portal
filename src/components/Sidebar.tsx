@@ -67,22 +67,25 @@ export function Sidebar() {
     isAdmin ||
     actions.includes("reports.triage") ||
     actions.includes("feedback.submit");
+  const isQa = session?.user?.isQaRank ?? true;
 
   // Build main nav dynamically so the Feedback link only appears when the
   // session grants either feedback.submit (Beta Testers) or reports.triage
-  // (QA staff who need to triage it).
-  const mainNav = [
-    ...BASE_MAIN_NAV,
-    ...(canSeeFeedback
-      ? [
-          {
-            href: "/feedback",
-            label: "Beta Feedback",
-            icon: <MessageSquareWarning className="h-4 w-4 shrink-0" />,
-          },
-        ]
-      : []),
-  ];
+  // (QA staff who need to triage it). QA-only links are hidden from Beta Testers.
+  const mainNav = BASE_MAIN_NAV.filter((item) => {
+    if (!isQa && ["/reports", "/overview", "/testing", "/absence"].includes(item.href)) {
+      return false;
+    }
+    return true;
+  });
+
+  if (canSeeFeedback) {
+    mainNav.push({
+      href: "/feedback",
+      label: "Beta Feedback",
+      icon: <MessageSquareWarning className="h-4 w-4 shrink-0" />,
+    });
+  }
 
   const [me, setMe] = useState<Me | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);

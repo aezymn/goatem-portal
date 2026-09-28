@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { bugReports, members } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireRosterMember } from "@/lib/requireSession";
+import { requireQaMember } from "@/lib/requireSession";
 import { isFullAdmin } from "@/lib/permissions";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
@@ -92,7 +92,7 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/reports/[id]/participants">
 ) {
-  const auth = await requireRosterMember();
+  const auth = await requireQaMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const { discordId } = auth.session.user;
@@ -135,7 +135,7 @@ export async function DELETE(
   request: Request,
   ctx: RouteContext<"/api/reports/[id]/participants">
 ) {
-  const auth = await requireRosterMember();
+  const auth = await requireQaMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const { discordId } = auth.session.user;

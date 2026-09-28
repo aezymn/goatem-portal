@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { testLogs, testLogAttendees, testLogBugs } from "@/db/schema";
-import { requireRosterMember } from "@/lib/requireSession";
+import { requireQaMember } from "@/lib/requireSession";
 import { createTestLogSchema } from "@/lib/validation";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { logAudit } from "@/lib/audit";
@@ -11,7 +11,7 @@ import { checkRateLimit } from "@/lib/rateLimit";
 // own work isn't a privileged action, and gating it would just mean less
 // gets recorded.
 export async function POST(request: Request) {
-  const auth = await requireRosterMember();
+  const auth = await requireQaMember();
   if (!auth.ok) return auth.response;
   const { discordId } = auth.session.user;
 

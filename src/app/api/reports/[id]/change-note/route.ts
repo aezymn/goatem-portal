@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { bugReports } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireRosterMember } from "@/lib/requireSession";
+import { requireQaMember } from "@/lib/requireSession";
 import { getMemberByDiscordId } from "@/lib/members";
 import { saveChangeNote } from "@/lib/changelog";
 import { changeNoteSchema } from "@/lib/validation";
@@ -22,7 +22,7 @@ export async function POST(
   request: Request,
   ctx: RouteContext<"/api/reports/[id]/change-note">
 ) {
-  const auth = await requireRosterMember();
+  const auth = await requireQaMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const { discordId } = auth.session.user;

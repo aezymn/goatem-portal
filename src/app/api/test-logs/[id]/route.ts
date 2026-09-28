@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/db";
 import { testLogs, testLogAttendees, testLogBugs } from "@/db/schema";
 import { and, eq, isNull } from "drizzle-orm";
-import { requireRosterMember } from "@/lib/requireSession";
+import { requireQaMember } from "@/lib/requireSession";
 import { updateTestLogSchema } from "@/lib/validation";
 import { displayNameFor, getMemberByDiscordId } from "@/lib/members";
 import { isFullAdmin } from "@/lib/permissions";
@@ -13,7 +13,7 @@ export async function PATCH(
   request: Request,
   ctx: RouteContext<"/api/test-logs/[id]">
 ) {
-  const auth = await requireRosterMember();
+  const auth = await requireQaMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const { discordId } = auth.session.user;
@@ -119,7 +119,7 @@ export async function DELETE(
   _request: Request,
   ctx: RouteContext<"/api/test-logs/[id]">
 ) {
-  const auth = await requireRosterMember();
+  const auth = await requireQaMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   const { discordId } = auth.session.user;

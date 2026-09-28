@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRosterMember } from "@/lib/requireSession";
+import { requireQaMember } from "@/lib/requireSession";
 import { getReportVersion } from "@/lib/reports";
 
 /**
@@ -11,7 +11,7 @@ export async function GET(
   _request: Request,
   ctx: RouteContext<"/api/reports/[id]/version">
 ) {
-  const auth = await requireRosterMember();
+  const auth = await requireQaMember();
   if (!auth.ok) return auth.response;
   const { id } = await ctx.params;
   return NextResponse.json({ version: await getReportVersion(id) });

@@ -59,6 +59,14 @@ export async function middleware(request: NextRequest) {
     "/overview",
   ];
   const requiresRoster = rosterRequiredPaths.some(p => pathname.startsWith(p));
+  
+  const qaRequiredPaths = [
+    "/reports",
+    "/absence",
+    "/testing",
+    "/overview",
+  ];
+  const requiresQa = qaRequiredPaths.some(p => pathname.startsWith(p));
 
   if (requiresAuth) {
     if (!isAuthed) {
@@ -67,7 +75,9 @@ export async function middleware(request: NextRequest) {
       response = NextResponse.redirect(signInUrl);
     } else if (token?.linked === false && !pathname.startsWith("/link-roblox")) {
       response = NextResponse.redirect(new URL("/link-roblox", request.url));
-    } else if (requiresRoster && (!token?.isOnRoster || token?.isQaRank === false) && !token?.isCreator && !token?.isPortalAdmin) {
+    } else if (requiresQa && token?.isQaRank === false && !token?.isCreator && !token?.isPortalAdmin) {
+      response = NextResponse.redirect(new URL("/access-denied", request.url));
+    } else if (requiresRoster && !token?.isOnRoster && !token?.isCreator && !token?.isPortalAdmin) {
       response = NextResponse.redirect(new URL("/access-denied", request.url));
     } else if (pathname.startsWith("/admin")) {
       const creatorIds: string[] =

@@ -64,9 +64,21 @@ export async function requireRosterMember(): Promise<AuthResult> {
   const isAdmin = isFullAdmin(accessContext(session));
   
   if (!member && !isAdmin) return FORBIDDEN;
-  if (!session.user.isQaRank && !isAdmin) return FORBIDDEN;
 
   return { ok: true, session };
+}
+
+/**
+ * Requires the member to hold a rank that grants QA Access (or be a full admin).
+ */
+export async function requireQaMember(): Promise<AuthResult> {
+  const result = await requireRosterMember();
+  if (!result.ok) return result;
+
+  const isAdmin = isFullAdmin(accessContext(result.session));
+  if (!result.session.user.isQaRank && !isAdmin) return FORBIDDEN;
+
+  return result;
 }
 
 /**
