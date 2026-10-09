@@ -3,6 +3,13 @@ import { getToken } from "next-auth/jwt";
 
 // Page-level gate and Content Security Policy (CSP) enforcement.
 export async function middleware(request: NextRequest) {
+  const host = request.headers.get("host") || "";
+  if (host.startsWith("www.")) {
+    const newUrl = new URL(request.url);
+    newUrl.host = host.replace(/^www\./, "");
+    return NextResponse.redirect(newUrl, 301);
+  }
+
   const nonce = Buffer.from(crypto.randomUUID()).toString("base64");
   const cspHeader = `
     default-src 'self';
