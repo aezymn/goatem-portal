@@ -20,7 +20,13 @@ export default async function SignInPage({
   const session = await getServerSession(authOptions);
   const { error, from } = await searchParams;
 
-  const destination = typeof from === "string" && from.startsWith("/") ? from : "/";
+  const destination =
+    typeof from === "string" &&
+    from.startsWith("/") &&
+    from !== "/sign-in" &&
+    from !== "/access-denied"
+      ? from
+      : "/";
 
   if (session && !session.stale && session.user?.discordId) {
     redirect(destination);
