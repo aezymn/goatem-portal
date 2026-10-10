@@ -15,7 +15,10 @@ import { createHash } from "crypto";
 // access" would be actively misleading.
 
 export function generateVerificationCode(discordId: string): string {
-  const secret = process.env.NEXTAUTH_SECRET || "fallback-secret";
+  const secret = process.env.NEXTAUTH_SECRET;
+  if (!secret) {
+    throw new Error("NEXTAUTH_SECRET is not configured; refusing to generate predictable verification codes.");
+  }
   return "QA-" + createHash("sha256").update(discordId + secret).digest("hex").slice(0, 6).toUpperCase();
 }
 

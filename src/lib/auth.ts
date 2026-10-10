@@ -100,7 +100,7 @@ export const authOptions: AuthOptions = {
       clientId: process.env.DISCORD_CLIENT_ID!,
       clientSecret: process.env.DISCORD_CLIENT_SECRET!,
       authorization: { params: { scope: "identify guilds.members.read" } },
-      checks: ["none"],
+      checks: ["state"],
     }),
   ],
   session: {

@@ -46,8 +46,22 @@ export function checkRateLimit(
   return true;
 }
 
+/**
+ * Resolves the client IP address from trusted edge headers.
+ * Prioritizes x-real-ip and cf-connecting-ip before falling back to x-forwarded-for.
+ */
 export function getClientIp(request: Request): string {
+  const realIp = request.headers.get("x-real-ip");
+  if (realIp && realIp.trim()) return realIp.trim();
+
+  const cfConnectingIp = request.headers.get("cf-connecting-ip");
+  if (cfConnectingIp && cfConnectingIp.trim()) return cfConnectingIp.trim();
+
   const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) return forwarded.split(",")[0].trim();
+  if (forwarded) {
+    const candidate = forwarded.split(",")[0]?.trim();
+    if (candidate) return candidate;
+  }
+
   return "unknown";
 }
